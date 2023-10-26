@@ -14,15 +14,10 @@ struct User {
 fn main() -> Result<(), Error> {
     let request_url = format!(
         "https://api.github.com/repos/{owner}/{repo}/stargazers",
-        owner = "rust-lang-nursery",
-        repo = "rust-cookbook"
+        owner = "fuulish",
+        repo = "pong"
     );
     println!("{}", request_url);
-    let request = reqwest::blocking::Client::new()
-        .post("https://api.github.com/graphql")
-        .bearer_auth("MY_GH_TOKEN")
-        .build()?;
-
     let token = env::var("TOKEN").unwrap();
 
     let client = reqwest::blocking::Client::new()
