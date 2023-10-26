@@ -5,17 +5,21 @@ use std::env;
 
 #[derive(Deserialize, Debug)]
 struct User {
-    login: String,
-    id: u32,
+    body: String,
+    commit_id: String,
+    original_commit_id: String,
+    line: u32,
+    original_line: u32,
 }
 
 // #[tokio::main] - using the blocking version should be fine for now
 // this file should get updated on demand or rarely
 fn main() -> Result<(), Error> {
     let request_url = format!(
-        "https://api.github.com/repos/{owner}/{repo}/stargazers",
+        "https://api.github.com/repos/{owner}/{repo}/pulls/{prnum}/comments",
         owner = "fuulish",
-        repo = "pong"
+        repo = "pong",
+        prnum = 2,
     );
     println!("{}", request_url);
     let token = env::var("TOKEN").unwrap();
