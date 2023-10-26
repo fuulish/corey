@@ -17,7 +17,7 @@ fn main() -> Result<(), Error> {
     );
     println!("{}", request_url);
     let client = reqwest::blocking::Client::builder()
-        .user_agent("frankytanky")
+        .user_agent("clireview/0.0.1")
         .build()?;
     let response = client.get(&request_url).send()?;
 
