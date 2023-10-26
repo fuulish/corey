@@ -16,7 +16,10 @@ fn main() -> Result<(), Error> {
         repo = "rust-cookbook"
     );
     println!("{}", request_url);
-    let response = reqwest::blocking::get(&request_url)?;
+    let client = reqwest::blocking::Client::builder()
+        .user_agent("frankytanky")
+        .build()?;
+    let response = client.get(&request_url).send()?;
 
     let users: Vec<User> = response.json()?;
     println!("{:?}", users);
