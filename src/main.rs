@@ -50,20 +50,46 @@ impl Error {
     }
 }
 
+enum Platform {
+    Github,
+}
+
+struct PullRequest {
+    platform: Platform,
+    owner: String,
+    repo: String,
+    id: u32,
+}
+
+impl PullRequest {
+    pub fn construct_url(&self) -> String {
+        match self.platform {
+            Platform::Github => {
+                format!(
+                    "https://api.github.com/repos/{owner}/{repo}/pulls/{prnum}/comments",
+                    owner = self.owner,
+                    repo = self.repo,
+                    prnum = self.id,
+                )
+            }
+        }
+    }
+}
+
 // #[tokio::main] - using the blocking version should be fine for now
 // this file should get updated on demand or rarely
 fn main() -> Result<(), Error> {
-    let request_url = format!(
-        "https://api.github.com/repos/{owner}/{repo}/pulls/{prnum}/comments",
-        owner = "fuulish",
-        repo = "pong",
-        prnum = 2,
-    );
-    println!("{}", request_url);
     let token = env::var("TOKEN").map_err(Error::from_var_error)?;
 
+    let pr = PullRequest {
+        platform: Platform::Github,
+        owner: "fuulish".to_owned(),
+        repo: "pong".to_owned(),
+        id: 2,
+    };
+
     let client = reqwest::blocking::Client::new()
-        .get(request_url)
+        .get(pr.construct_url())
         .header("User-Agent", "clireview/0.0.1")
         .bearer_auth(token);
     let response = client.send().map_err(Error::from_reqwest_error)?;
