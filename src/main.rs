@@ -4,7 +4,7 @@ use serde::Deserialize;
 use std::env;
 
 #[derive(Deserialize, Debug)]
-struct User {
+struct ReviewComment {
     id: u32, // too small?
     in_reply_to_id: Option<u32>,
     body: String,
@@ -43,7 +43,7 @@ fn main() -> Result<(), Error> {
     */
     // .user_agent("clireview/0.0.1")
 
-    let users: Vec<User> = response.json()?;
+    let users: Vec<ReviewComment> = response.json()?;
     println!("{:?}", users);
     Ok(())
 }
