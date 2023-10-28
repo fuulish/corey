@@ -67,16 +67,6 @@ fn main() -> Result<(), Error> {
         .header("User-Agent", "clireview/0.0.1")
         .bearer_auth(token);
     let response = client.send().map_err(Error::from_reqwest_error)?;
-    /*
-    let response = Client::new()
-        .get(build_github_access_data_url())
-        .header("Accept", "application/json")
-        .header("User-Agent", "Rust")
-        .bearer_auth(token)
-        .send()
-        .await?;
-    */
-    // .user_agent("clireview/0.0.1")
 
     let users: Vec<ReviewComment> = response.json().map_err(Error::from_reqwest_error)?;
     println!("{:?}", users);
