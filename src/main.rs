@@ -8,7 +8,8 @@ struct User {
     body: String,
     commit_id: String,
     original_commit_id: String,
-    line: u32,
+    /// can be null through overwritten commit (force-push/rebase)
+    line: Option<u32>,
     original_line: u32,
 }
 
