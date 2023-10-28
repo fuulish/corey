@@ -4,6 +4,11 @@ use serde::Deserialize;
 use std::env;
 
 #[derive(Deserialize, Debug)]
+struct User {
+    login: String,
+}
+
+#[derive(Deserialize, Debug)]
 struct ReviewComment {
     id: u32, // too small?
     in_reply_to_id: Option<u32>,
@@ -13,6 +18,7 @@ struct ReviewComment {
     /// can be null through overwritten commit (force-push/rebase)
     line: Option<u32>,
     original_line: u32,
+    user: User,
 }
 
 // #[tokio::main] - using the blocking version should be fine for now
