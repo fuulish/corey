@@ -5,6 +5,8 @@ use std::env;
 
 #[derive(Deserialize, Debug)]
 struct User {
+    id: u32, // too small?
+    in_reply_to_id: Option<u32>,
     body: String,
     commit_id: String,
     original_commit_id: String,
