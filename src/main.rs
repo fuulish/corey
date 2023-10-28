@@ -1,12 +1,24 @@
 use reqwest;
 use serde::Deserialize;
 
+use core::fmt;
 use std::env;
 
 #[derive(Debug)]
 enum Error {
     Processing(env::VarError),
     Gathering(reqwest::Error),
+}
+
+impl std::error::Error for Error {}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        f.write_str(match self {
+            Error::Processing(_) => "processing error",
+            Error::Gathering(_) => "gathering error",
+        })
+    }
 }
 
 #[derive(Deserialize, Debug)]
