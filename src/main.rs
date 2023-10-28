@@ -51,7 +51,15 @@ impl Error {
 }
 
 enum Platform {
-    Github,
+    Github(String),
+}
+
+impl Platform {
+    fn get_token(&self) -> &str {
+        match self {
+            Platform::Github(ref token) => token,
+        }
+    }
 }
 
 struct PullRequest {
@@ -62,9 +70,9 @@ struct PullRequest {
 }
 
 impl PullRequest {
-    pub fn construct_url(&self) -> String {
-        match self.platform {
-            Platform::Github => {
+    pub fn get_review_comments(&self) -> Result<Vec<ReviewComment>, Error> {
+        let request_url = match self.platform {
+            Platform::Github(_) => {
                 format!(
                     "https://api.github.com/repos/{owner}/{repo}/pulls/{prnum}/comments",
                     owner = self.owner,
@@ -72,7 +80,15 @@ impl PullRequest {
                     prnum = self.id,
                 )
             }
-        }
+        };
+        let client = reqwest::blocking::Client::new()
+            .get(request_url)
+            .header("User-Agent", "clireview/0.0.1")
+            .bearer_auth(self.platform.get_token());
+
+        let response = client.send().map_err(Error::from_reqwest_error)?;
+
+        response.json().map_err(Error::from_reqwest_error)
     }
 }
 
@@ -82,19 +98,14 @@ fn main() -> Result<(), Error> {
     let token = env::var("TOKEN").map_err(Error::from_var_error)?;
 
     let pr = PullRequest {
-        platform: Platform::Github,
+        platform: Platform::Github(token),
         owner: "fuulish".to_owned(),
         repo: "pong".to_owned(),
         id: 2,
     };
 
-    let client = reqwest::blocking::Client::new()
-        .get(pr.construct_url())
-        .header("User-Agent", "clireview/0.0.1")
-        .bearer_auth(token);
-    let response = client.send().map_err(Error::from_reqwest_error)?;
+    let comments = pr.get_review_comments()?;
 
-    let users: Vec<ReviewComment> = response.json().map_err(Error::from_reqwest_error)?;
-    println!("{:?}", users);
+    println!("{:?}", comments);
     Ok(())
 }
