@@ -37,6 +37,7 @@ struct ReviewComment {
     line: Option<u32>,
     original_line: u32,
     user: User,
+    diff_hunk: String,
 }
 
 // rustlings does it like this:
