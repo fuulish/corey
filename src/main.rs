@@ -126,7 +126,7 @@ fn main() -> Result<(), Error> {
     //      however, for the typical size of reviews, we are talking
     //      about, this will not be expensive either
     //          XXX: optimize, when the need arises
-    for (k, &v) in original_ids.iter() {
+    for (k, _) in original_ids.iter() {
         reply_ids.insert(
             *k,
             comments
