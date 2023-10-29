@@ -2,7 +2,7 @@ use reqwest;
 use serde::Deserialize;
 
 use core::fmt;
-use std::env;
+use std::{collections::HashMap, env};
 
 #[derive(Debug)]
 enum Error {
@@ -107,5 +107,43 @@ fn main() -> Result<(), Error> {
     let comments = pr.get_review_comments()?;
 
     println!("{:?}", comments);
+
+    // XXX: sort into two hashmaps
+    //      - one with original ids
+    //      - one with replies to original ids
+
+    let original_ids: HashMap<_, _> = comments
+        .iter()
+        .filter(|x| None == x.in_reply_to_id)
+        .map(|c| (c.id, c))
+        .collect();
+
+    let mut reply_ids: HashMap<u32, Vec<&ReviewComment>> = HashMap::new();
+
+    // XXX: depending on size of review, this will not be cheap
+    //      however, for the typical size of reviews, we are talking
+    //      about, this will not be expensive either
+    //          XXX: optimize, when the need arises
+    for (k, &v) in original_ids.iter() {
+        reply_ids.insert(
+            *k,
+            comments
+                .iter()
+                .filter(|x| {
+                    if let Some(id) = x.in_reply_to_id {
+                        if id == *k {
+                            true
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    }
+                })
+                .collect(),
+        );
+    }
+    let reply_ids = reply_ids; // don't need this to be mutable any longer
+    println!("originals: {:?}", reply_ids);
     Ok(())
 }
