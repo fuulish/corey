@@ -38,6 +38,7 @@ struct ReviewComment {
     original_line: u32,
     user: User,
     diff_hunk: String,
+    path: String,
 }
 
 // rustlings does it like this:
@@ -154,6 +155,7 @@ fn main() -> Result<(), Error> {
         // XXX: I always forget, do we need this explicit
         //      iter call?
         println!("|{}|", "+".repeat(NCOL));
+        println!("{}", comment.path);
         println!("{}", comment.diff_hunk);
         println!(
             "{name}: {body}",
