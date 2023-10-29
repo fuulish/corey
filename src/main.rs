@@ -110,8 +110,6 @@ fn main() -> Result<(), Error> {
 
     let comments = pr.get_review_comments()?;
 
-    println!("{:?}", comments);
-
     // XXX: sort into two hashmaps
     //      - one with original ids
     //      - one with replies to original ids
@@ -148,7 +146,6 @@ fn main() -> Result<(), Error> {
         );
     }
     let reply_ids = reply_ids; // don't need this to be mutable any longer
-    println!("originals: {:?}", reply_ids);
 
     // pretty printing of conversations
     for (id, comment) in original_ids.iter() {
