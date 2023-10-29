@@ -93,6 +93,8 @@ impl PullRequest {
     }
 }
 
+const NCOL: usize = 80;
+
 // #[tokio::main] - using the blocking version should be fine for now
 // this file should get updated on demand or rarely
 fn main() -> Result<(), Error> {
@@ -146,5 +148,32 @@ fn main() -> Result<(), Error> {
     }
     let reply_ids = reply_ids; // don't need this to be mutable any longer
     println!("originals: {:?}", reply_ids);
+
+    // pretty printing of conversations
+    for (id, comment) in original_ids.iter() {
+        // XXX: I always forget, do we need this explicit
+        //      iter call?
+        println!("|{}|", "+".repeat(NCOL));
+        println!("{}", comment.diff_hunk);
+        println!(
+            "{name}: {body}",
+            name = comment.user.login,
+            body = comment.body
+        );
+        match reply_ids.get(id) {
+            None => {
+                println!("|{}|", "-".repeat(NCOL));
+                continue;
+            }
+            Some(rid) => {
+                // XXX: sort replies by ids (if required)
+                for reply in rid {
+                    // XXX error handling
+                    println!("{name}: {body}", name = reply.user.login, body = reply.body);
+                }
+                println!("|{}|", "-".repeat(NCOL));
+            }
+        }
+    }
     Ok(())
 }
