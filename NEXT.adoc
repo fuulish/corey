@@ -1,0 +1,13 @@
+== review initialization
+
+== review cleanup
+
+== LSP/LSIF intermittent format
+
+* YAML or LSIF
+
+== JSON RPC server
+
+== LSP specifics
+
+== editor integration
