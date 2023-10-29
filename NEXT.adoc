@@ -1,5 +1,8 @@
 == review initialization
 
+* clap parser
+* read, e.g., here: https://rust-cli.github.io/book/tutorial/cli-args.html
+
 == review cleanup
 
 == LSP/LSIF intermittent format
