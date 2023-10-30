@@ -3,6 +3,15 @@
 * clap parser
 * read, e.g., here: https://rust-cli.github.io/book/tutorial/cli-args.html
 
+* how about taking some inspiration from here: https://www.joshfinnie.com/blog/a-command-line-application-in-rust/
+** use all the input options
+** also use the api-key input option?
+** store api token centrally?
+** how does git-machete do it?
+*** IIRC, it reuses some stuff from the `gh` tool
+
+* optionally, save the review to disk in yaml form (for easy display)
+
 == review cleanup
 
 == LSP/LSIF intermittent format
