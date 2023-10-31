@@ -1,11 +1,12 @@
 use reqwest;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use core::fmt;
 use std::{collections::HashMap, env};
 
 #[derive(Debug)]
 enum Error {
+    NotImplemented,
     Processing(env::VarError),
     Gathering(reqwest::Error),
 }
@@ -17,16 +18,17 @@ impl fmt::Display for Error {
         f.write_str(match self {
             Error::Processing(_) => "processing error",
             Error::Gathering(_) => "gathering error",
+            Error::NotImplemented => "not implemented",
         })
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 struct User {
     login: String,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 struct ReviewComment {
     id: u32, // too small?
     in_reply_to_id: Option<u32>,
@@ -52,11 +54,12 @@ impl Error {
     }
 }
 
-#[derive(ValueEnum, Debug, Copy, Clone)]
+#[derive(ValueEnum, Debug, Copy, Clone, Serialize, Deserialize)]
 enum ReviewInterface {
     GitHub,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
 struct Review {
     interface: ReviewInterface,
     token: String,
@@ -162,7 +165,17 @@ struct Args {
 fn main() -> Result<(), Error> {
     let args = Args::parse();
 
-    let pr = Review::from_args(&args)?;
+    let pr = match args.command {
+        Command::Init => Review::from_args(&args)?,
+        Command::Update => return Err(Error::NotImplemented), // read config and update comments
+    };
+
+    let f = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .open("review.yml")
+        .expect("Couldn't open file");
+    serde_yaml::to_writer(f, &pr).unwrap();
 
     // XXX: sort into two hashmaps
     //      - one with original ids
