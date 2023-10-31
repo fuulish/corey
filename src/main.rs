@@ -52,41 +52,65 @@ impl Error {
     }
 }
 
-enum Platform {
-    Github(String),
+#[derive(ValueEnum, Debug, Copy, Clone)]
+enum ReviewInterface {
+    GitHub,
 }
 
-impl Platform {
-    fn get_token(&self) -> &str {
-        match self {
-            Platform::Github(ref token) => token,
-        }
-    }
-}
-
-struct PullRequest {
-    platform: Platform,
+struct Review {
+    interface: ReviewInterface,
+    token: String,
     owner: String,
     repo: String,
+    url: String,
     id: u32,
+    pub comments: Vec<ReviewComment>,
+    // XXX: maybe add review comments here as well
+    //      they do belong to the review, after all
 }
 
-impl PullRequest {
-    pub fn get_review_comments(&self) -> Result<Vec<ReviewComment>, Error> {
-        let request_url = match self.platform {
-            Platform::Github(_) => {
+impl Review {
+    pub fn from_args(args: &Args) -> Result<Self, Error> {
+        Ok(Review {
+            interface: args.platform,
+            token: args.token.to_owned(),
+            owner: args.owner.to_owned(),
+            repo: args.repo.to_owned(),
+            url: args.url.to_owned(),
+            id: args.id,
+            comments: Review::get_review_comments(
+                &args.owner,
+                &args.repo,
+                &args.url,
+                args.id,
+                &args.token,
+                args.platform,
+            )?,
+        })
+    }
+    fn get_review_comments(
+        owner: &str,
+        repo: &str,
+        url: &str,
+        prnum: u32,
+        token: &str,
+        interface: ReviewInterface,
+    ) -> Result<Vec<ReviewComment>, Error> {
+        let request_url = match interface {
+            ReviewInterface::GitHub => {
                 format!(
-                    "https://api.github.com/repos/{owner}/{repo}/pulls/{prnum}/comments",
-                    owner = self.owner,
-                    repo = self.repo,
-                    prnum = self.id,
+                    "https://api.{url}/repos/{owner}/{repo}/pulls/{prnum}/comments",
+                    owner = owner,
+                    repo = repo,
+                    url = url,
+                    prnum = prnum,
                 )
             }
         };
         let client = reqwest::blocking::Client::new()
             .get(request_url)
             .header("User-Agent", "clireview/0.0.1")
-            .bearer_auth(self.platform.get_token());
+            .bearer_auth(&token);
 
         let response = client.send().map_err(Error::from_reqwest_error)?;
 
@@ -96,25 +120,56 @@ impl PullRequest {
 
 const NCOL: usize = 80;
 
+use clap::{Parser, ValueEnum};
+
+// ValueEnum from here: https://strawlab.org/strand-braid-api-docs/latest/clap/trait.ValueEnum.html#example
+#[derive(ValueEnum, Debug, Clone)]
+enum Command {
+    Init,
+    Update,
+}
+
+// XXX: provide optional remote, otherwise see if .git directory is present and use default remote
+//      is there a default remote? there is an upstream branch, could use that..., or simply
+//      specify the remote to use - otherwise specify url directly
+//
+// XXX: can an enum with embedded value be used in input parsing?
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    #[arg(short = 't', long)]
+    token: String,
+    // XXX: all of those work, but which one is right
+    // #[arg(value_enum)]
+    // #[arg(short='t', long, value_enum)]
+    // #[clap(value_enum)]
+    #[clap(value_enum)]
+    command: Command,
+    #[arg(short = 'u', long)]
+    url: String,
+    #[arg(value_enum, short = 'p', long)]
+    platform: ReviewInterface,
+    #[arg(short = 'o', long)]
+    owner: String,
+    #[arg(short = 'r', long)]
+    repo: String,
+    #[arg(short = 'i', long)]
+    id: u32,
+}
+
 // #[tokio::main] - using the blocking version should be fine for now
 // this file should get updated on demand or rarely
 fn main() -> Result<(), Error> {
-    let token = env::var("TOKEN").map_err(Error::from_var_error)?;
+    let args = Args::parse();
 
-    let pr = PullRequest {
-        platform: Platform::Github(token),
-        owner: "fuulish".to_owned(),
-        repo: "pong".to_owned(),
-        id: 2,
-    };
-
-    let comments = pr.get_review_comments()?;
+    let pr = Review::from_args(&args)?;
 
     // XXX: sort into two hashmaps
     //      - one with original ids
     //      - one with replies to original ids
 
-    let original_ids: HashMap<_, _> = comments
+    let original_ids: HashMap<_, _> = pr
+        .comments
         .iter()
         .filter(|x| None == x.in_reply_to_id)
         .map(|c| (c.id, c))
@@ -129,7 +184,7 @@ fn main() -> Result<(), Error> {
     for (k, _) in original_ids.iter() {
         reply_ids.insert(
             *k,
-            comments
+            pr.comments
                 .iter()
                 .filter(|x| {
                     if let Some(id) = x.in_reply_to_id {
