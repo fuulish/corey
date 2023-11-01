@@ -2,13 +2,14 @@ use reqwest;
 use serde::{Deserialize, Serialize};
 
 use core::fmt;
-use std::{collections::HashMap, env};
+use std::{collections::HashMap, env, fs};
 
 #[derive(Debug)]
 enum Error {
     NotImplemented,
     Processing(env::VarError),
     Gathering(reqwest::Error),
+    IOError(std::io::Error),
 }
 
 impl std::error::Error for Error {}
@@ -19,6 +20,7 @@ impl fmt::Display for Error {
             Error::Processing(_) => "processing error",
             Error::Gathering(_) => "gathering error",
             Error::NotImplemented => "not implemented",
+            Error::IOError(_) => "I/O error",
         })
     }
 }
@@ -52,6 +54,9 @@ impl Error {
     fn from_reqwest_error(err: reqwest::Error) -> Error {
         Error::Gathering(err)
     }
+    fn from_io_error(err: std::io::Error) -> Error {
+        Error::IOError(err)
+    }
 }
 
 #[derive(ValueEnum, Debug, Copy, Clone, Serialize, Deserialize)]
@@ -62,7 +67,6 @@ enum ReviewInterface {
 #[derive(Debug, Serialize, Deserialize)]
 struct Review {
     interface: ReviewInterface,
-    token: String,
     owner: String,
     repo: String,
     url: String,
@@ -73,10 +77,9 @@ struct Review {
 }
 
 impl Review {
-    pub fn from_args(args: &Args) -> Result<Self, Error> {
+    pub fn from_args(args: &Args, token: &str) -> Result<Self, Error> {
         Ok(Review {
             interface: args.platform,
-            token: args.token.to_owned(),
             owner: args.owner.to_owned(),
             repo: args.repo.to_owned(),
             url: args.url.to_owned(),
@@ -86,7 +89,7 @@ impl Review {
                 &args.repo,
                 &args.url,
                 args.id,
-                &args.token,
+                token,
                 args.platform,
             )?,
         })
@@ -165,8 +168,10 @@ struct Args {
 fn main() -> Result<(), Error> {
     let args = Args::parse();
 
+    let token = fs::read_to_string(&args.token).map_err(Error::from_io_error)?;
+
     let pr = match args.command {
-        Command::Init => Review::from_args(&args)?,
+        Command::Init => Review::from_args(&args, &token)?,
         Command::Update => return Err(Error::NotImplemented), // read config and update comments
     };
 
