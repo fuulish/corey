@@ -82,6 +82,8 @@ struct Review {
 
 // XXX: having reviewcomments in here would have been nice
 //      however, it generates a self-referential struct, which does not work out of the box in rust
+//      it would be possible to setup starter and replies as Option types and only fill them after
+//      having set up the base struct...
 struct Conversation<'a> {
     pub starter: HashMap<u32, &'a ReviewComment>,
     pub replies: HashMap<u32, Vec<&'a ReviewComment>>,
