@@ -64,6 +64,10 @@ enum ReviewInterface {
     GitHub,
 }
 
+// XXX: a review should neglect the infrastructure things (to a large degree)
+//      keep a list of comments and the views into it being original comments and replies
+//      -> one private member and two public view
+// XXX: move infrastructure related things to ReviewInterface (and have that use the platform enum)
 #[derive(Debug, Serialize, Deserialize)]
 struct Review {
     interface: ReviewInterface,
