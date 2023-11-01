@@ -2,12 +2,11 @@ use reqwest;
 use serde::{Deserialize, Serialize};
 
 use core::fmt;
-use std::{collections::HashMap, env, fs};
+use std::{collections::HashMap, fs};
 
 #[derive(Debug)]
 enum Error {
     NotImplemented,
-    Processing(env::VarError),
     Gathering(reqwest::Error),
     IOError(std::io::Error),
 }
@@ -17,7 +16,6 @@ impl std::error::Error for Error {}
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         f.write_str(match self {
-            Error::Processing(_) => "processing error",
             Error::Gathering(_) => "gathering error",
             Error::NotImplemented => "not implemented",
             Error::IOError(_) => "I/O error",
@@ -47,10 +45,6 @@ struct ReviewComment {
 
 // rustlings does it like this:
 impl Error {
-    fn from_var_error(err: env::VarError) -> Error {
-        Error::Processing(err)
-    }
-
     fn from_reqwest_error(err: reqwest::Error) -> Error {
         Error::Gathering(err)
     }
