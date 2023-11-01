@@ -78,6 +78,7 @@ struct Review {
     auth: String,
     url: String,
     id: u32,
+    pub comments: Vec<ReviewComment>,
 }
 
 // XXX: having reviewcomments in here would have been nice
@@ -166,31 +167,46 @@ impl Review {
             url: args.url.to_owned(),
             id: args.id,
             auth: args.token.to_owned(),
+            comments: Review::get_comments(
+                args.platform,
+                &args.owner,
+                &args.repo,
+                &args.url,
+                &args.token,
+                args.id,
+            )?,
         })
     }
 
-    fn get_authentication(&self) -> Result<String, Error> {
-        fs::read_to_string(&self.auth).map_err(Error::from_io_error)
+    fn get_authentication(auth: &str) -> Result<String, Error> {
+        fs::read_to_string(auth).map_err(Error::from_io_error)
     }
-    pub fn get_comments(&self) -> Result<Vec<ReviewComment>, Error> {
-        let request_url = match self.interface {
+    fn get_comments(
+        interface: ReviewInterface,
+        owner: &str,
+        repo: &str,
+        url: &str,
+        auth: &str,
+        id: u32,
+    ) -> Result<Vec<ReviewComment>, Error> {
+        let request_url = match interface {
             ReviewInterface::GitHub => {
                 format!(
                     "https://api.{url}/repos/{owner}/{repo}/pulls/{prnum}/comments",
-                    owner = self.owner,
-                    repo = self.repo,
-                    url = self.url,
-                    prnum = self.id,
+                    owner = owner,
+                    repo = repo,
+                    url = url,
+                    prnum = id,
                 )
             }
         };
 
-        let token = self.get_authentication()?;
+        let token = Review::get_authentication(auth)?;
 
         let client = reqwest::blocking::Client::new()
             .get(request_url)
             .header("User-Agent", "clireview/0.0.1")
-            .bearer_auth(&token);
+            .bearer_auth(token);
 
         let response = client.send().map_err(Error::from_reqwest_error)?;
 
@@ -258,8 +274,7 @@ fn main() -> Result<(), Error> {
 
     pr.save_config().unwrap(); // XXX: return proper error
 
-    let comments = pr.get_comments()?;
-    let conversation = Conversation::from_review_comments(&comments)?;
+    let conversation = Conversation::from_review_comments(&pr.comments)?;
 
     conversation.print();
     Ok(())
