@@ -9,6 +9,7 @@ enum Error {
     NotImplemented,
     Gathering(reqwest::Error),
     IOError(std::io::Error),
+    YAML(serde_yaml::Error),
 }
 
 impl std::error::Error for Error {}
@@ -16,6 +17,7 @@ impl std::error::Error for Error {}
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         f.write_str(match self {
+            Error::YAML(_) => "YAML processing error",
             Error::Gathering(_) => "gathering error",
             Error::NotImplemented => "not implemented",
             Error::IOError(_) => "I/O error",
@@ -50,6 +52,9 @@ impl Error {
     }
     fn from_io_error(err: std::io::Error) -> Error {
         Error::IOError(err)
+    }
+    fn from_yaml_error(err: serde_yaml::Error) -> Error {
+        Error::YAML(err)
     }
 }
 
@@ -212,8 +217,7 @@ impl Review {
             .create(true)
             .open("review.yml")
             .expect("Couldn't open file");
-        serde_yaml::to_writer(f, &self).unwrap(); // XXX: return proper error
-        Ok(())
+        serde_yaml::to_writer(f, &self).map_err(Error::from_yaml_error)
     }
 }
 
@@ -266,7 +270,7 @@ fn main() -> Result<(), Error> {
         Command::Update => return Err(Error::NotImplemented), // read config and update comments
     };
 
-    pr.save_config().unwrap(); // XXX: return proper error
+    pr.save_config()?;
 
     let conversation = Conversation::from_review_comments(&pr.comments)?;
 
