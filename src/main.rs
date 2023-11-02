@@ -252,6 +252,7 @@ use clap::{Parser, ValueEnum};
 enum Command {
     Init,
     Update,
+    Run,
 }
 
 // XXX: provide optional remote, otherwise see if .git directory is present and use default remote
@@ -300,6 +301,7 @@ fn main() -> Result<(), Error> {
             }
             None => return Err(Error::MissingConfig),
         },
+        Command::Run => return Err(Error::NotImplemented),
     };
 
     // XXX: save into args.config (how about making that optional?)
