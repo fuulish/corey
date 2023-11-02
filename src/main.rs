@@ -7,6 +7,7 @@ use std::{collections::HashMap, fs};
 #[derive(Debug)]
 enum Error {
     NotImplemented,
+    MissingConfig,
     Gathering(reqwest::Error),
     IOError(std::io::Error),
     YAML(serde_yaml::Error),
@@ -21,6 +22,7 @@ impl fmt::Display for Error {
             Error::Gathering(_) => "gathering error",
             Error::NotImplemented => "not implemented",
             Error::IOError(_) => "I/O error",
+            Error::MissingConfig => "configuration incomplete",
         })
     }
 }
@@ -177,6 +179,18 @@ impl Review {
         })
     }
 
+    fn update_comments(&mut self) -> Result<(), Error> {
+        self.comments = Review::get_comments(
+            self.interface,
+            &self.owner,
+            &self.repo,
+            &self.url,
+            &self.auth,
+            self.id,
+        )?;
+        Ok(())
+    }
+
     fn get_authentication(auth: &str) -> Result<String, Error> {
         fs::read_to_string(auth).map_err(Error::from_io_error)
     }
@@ -219,6 +233,14 @@ impl Review {
             .expect("Couldn't open file");
         serde_yaml::to_writer(f, &self).map_err(Error::from_yaml_error)
     }
+
+    pub fn from_config(config: &str) -> Result<Self, Error> {
+        let f = std::fs::File::open(config).map_err(Error::from_io_error)?; // XXX: move to input
+                                                                            // parm (opening is not
+                                                                            // the responsibility
+                                                                            // of this function)
+        serde_yaml::from_reader(f).map_err(Error::from_yaml_error)
+    }
 }
 
 const NCOL: usize = 80;
@@ -236,7 +258,8 @@ enum Command {
 //      is there a default remote? there is an upstream branch, could use that..., or simply
 //      specify the remote to use - otherwise specify url directly
 //
-// XXX: can an enum with embedded value be used in input parsing?
+// XXX: can an enum with embedded value be used in input parsing? (nope)
+// XXX: turn initial setup args into optional arguments...
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
@@ -258,6 +281,8 @@ struct Args {
     repo: String,
     #[arg(short = 'i', long)]
     id: u32,
+    #[arg(short = 'c', long)]
+    config: Option<String>,
 }
 
 // #[tokio::main] - using the blocking version should be fine for now
@@ -267,9 +292,18 @@ fn main() -> Result<(), Error> {
 
     let pr = match args.command {
         Command::Init => Review::from_args(&args)?,
-        Command::Update => return Err(Error::NotImplemented), // read config and update comments
+        Command::Update => match args.config {
+            Some(c) => {
+                let mut pr = Review::from_config(&c)?;
+                pr.update_comments()?;
+                pr
+            }
+            None => return Err(Error::MissingConfig),
+        },
     };
 
+    // XXX: save into args.config (how about making that optional?)
+    //      i.e., how to represent optional arguments in serde
     pr.save_config()?;
 
     let conversation = Conversation::from_review_comments(&pr.comments)?;
