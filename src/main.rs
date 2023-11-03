@@ -292,6 +292,21 @@ struct Args {
     fname: String,
 }
 
+// XXX: decide on semantics
+//      init/update can refer solely to the configuration
+//          e.g., only update the PR number that you are referring to
+//          have a file watcher on running instance that notices if review things change
+//              review things can be either the configuration or the pointed to comments file
+//              then, re-serve the (possibly) updated comments
+//      init/update can refer to the whole review
+//
+//      running without a command could also mean: read configuration file and serve comments on
+//      LSP
+//
+//      - make the configuration file some sort of default
+//          - that makes reading it from the serving side easier (when the whole things is served
+//          from editor)
+
 // #[tokio::main] - using the blocking version should be fine for now
 // this file should get updated on demand or rarely
 fn main() -> Result<(), Error> {
@@ -304,7 +319,7 @@ fn main() -> Result<(), Error> {
             pr
         } // XXX: only create configuration
         Command::Update => match args.config {
-            // XXX: only read configuration
+            // XXX: only update configuration
             //      XXX: make sure that only this is set and other options are ignored
             Some(c) => Review::from_config(&c)?,
             None => return Err(Error::MissingConfig),
