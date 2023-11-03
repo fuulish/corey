@@ -4,10 +4,12 @@ use serde::{Deserialize, Serialize};
 use core::fmt;
 use std::{collections::HashMap, fs};
 
+#[allow(dead_code)]
 #[derive(Debug)]
 enum Error {
     NotImplemented,
     MissingConfig,
+    InconsistentConfig,
     Gathering(reqwest::Error),
     IOError(std::io::Error),
     YAML(serde_yaml::Error),
@@ -23,6 +25,7 @@ impl fmt::Display for Error {
             Error::NotImplemented => "not implemented",
             Error::IOError(_) => "I/O error",
             Error::MissingConfig => "configuration incomplete",
+            Error::InconsistentConfig => "configuration inconsistent",
         })
     }
 }
