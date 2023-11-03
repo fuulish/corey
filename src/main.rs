@@ -79,7 +79,8 @@ struct Review {
     auth: String,
     url: String,
     id: u32,
-    pub comments: Vec<ReviewComment>,
+    comments: String, // XXX: I really do not want this to be part of this struct
+                      //      XXX: re-extract and save comments to separate file
 }
 
 // XXX: having reviewcomments in here would have been nice
@@ -161,6 +162,7 @@ impl<'a> Conversation<'a> {
 
 impl Review {
     pub fn from_args(args: &Args) -> Result<Self, Error> {
+        // XXX: ensure that config filename and comments filename are not the same?
         Ok(Review {
             interface: args.platform,
             owner: args.owner.to_owned(),
@@ -168,17 +170,11 @@ impl Review {
             url: args.url.to_owned(),
             id: args.id,
             auth: args.token.to_owned(),
-            comments: Review::get_comments(
-                args.platform,
-                &args.owner,
-                &args.repo,
-                &args.url,
-                &args.token,
-                args.id,
-            )?,
+            comments: args.fname.to_owned(),
         })
     }
 
+    /* update comments or both comments and comments file
     fn update_comments(&mut self) -> Result<(), Error> {
         self.comments = Review::get_comments(
             self.interface,
@@ -190,31 +186,25 @@ impl Review {
         )?;
         Ok(())
     }
+    */
 
     fn get_authentication(auth: &str) -> Result<String, Error> {
         fs::read_to_string(auth).map_err(Error::from_io_error)
     }
-    fn get_comments(
-        interface: ReviewInterface,
-        owner: &str,
-        repo: &str,
-        url: &str,
-        auth: &str,
-        id: u32,
-    ) -> Result<Vec<ReviewComment>, Error> {
-        let request_url = match interface {
+    fn get_comments(&self) -> Result<Vec<ReviewComment>, Error> {
+        let request_url = match self.interface {
             ReviewInterface::GitHub => {
                 format!(
                     "https://api.{url}/repos/{owner}/{repo}/pulls/{prnum}/comments",
-                    owner = owner,
-                    repo = repo,
-                    url = url,
-                    prnum = id,
+                    owner = &self.owner,
+                    repo = &self.repo,
+                    url = &self.url,
+                    prnum = self.id,
                 )
             }
         };
 
-        let token = Review::get_authentication(auth)?;
+        let token = Review::get_authentication(&self.auth)?;
 
         let client = reqwest::blocking::Client::new()
             .get(request_url)
@@ -225,6 +215,8 @@ impl Review {
 
         response.json().map_err(Error::from_reqwest_error)
     }
+
+    // XXX: deduplicate file saving
     pub fn save_config(&self) -> Result<(), Error> {
         let f = std::fs::OpenOptions::new()
             .write(true)
@@ -232,6 +224,15 @@ impl Review {
             .open("review.yml")
             .expect("Couldn't open file");
         serde_yaml::to_writer(f, &self).map_err(Error::from_yaml_error)
+    }
+
+    pub fn save_comments(&self, comments: &Vec<ReviewComment>) -> Result<(), Error> {
+        let f = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .open(&self.comments)
+            .expect("Couldn't open file");
+        serde_yaml::to_writer(f, comments).map_err(Error::from_yaml_error)
     }
 
     pub fn from_config(config: &str) -> Result<Self, Error> {
@@ -284,6 +285,8 @@ struct Args {
     id: u32,
     #[arg(short = 'c', long)]
     config: Option<String>,
+    #[arg(short = 'f', long)]
+    fname: String,
 }
 
 // #[tokio::main] - using the blocking version should be fine for now
@@ -292,23 +295,29 @@ fn main() -> Result<(), Error> {
     let args = Args::parse();
 
     let pr = match args.command {
-        Command::Init => Review::from_args(&args)?,
+        Command::Init => {
+            let pr = Review::from_args(&args)?;
+            pr.save_config()?;
+            pr
+        } // XXX: only create configuration
         Command::Update => match args.config {
-            Some(c) => {
-                let mut pr = Review::from_config(&c)?;
-                pr.update_comments()?;
-                pr
-            }
+            // XXX: only read configuration
+            //      XXX: make sure that only this is set and other options are ignored
+            Some(c) => Review::from_config(&c)?,
             None => return Err(Error::MissingConfig),
         },
         Command::Run => return Err(Error::NotImplemented),
     };
 
+    // XXX: for init/update -> download comments into a Vec<ReviewComment>
+
     // XXX: save into args.config (how about making that optional?)
     //      i.e., how to represent optional arguments in serde
-    pr.save_config()?;
 
-    let conversation = Conversation::from_review_comments(&pr.comments)?;
+    let comments = pr.get_comments()?;
+    pr.save_comments(&comments)?;
+
+    let conversation = Conversation::from_review_comments(&comments)?;
 
     conversation.print();
     Ok(())
