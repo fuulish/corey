@@ -63,7 +63,9 @@ impl Error {
     }
 }
 
-#[derive(ValueEnum, Debug, Copy, Clone, Serialize, Deserialize)]
+// XXX: PartialEq needed for comparison in `from_args`
+//      XXX: find nicer way to check for invalid values in `from_args` and remove it here?!:?!?!??!
+#[derive(ValueEnum, PartialEq, Debug, Copy, Clone, Serialize, Deserialize)]
 enum ReviewInterface {
     GitHub,
 }
@@ -165,15 +167,36 @@ impl<'a> Conversation<'a> {
 
 impl Review {
     pub fn from_args(args: &Args) -> Result<Self, Error> {
-        // XXX: ensure that config filename and comments filename are not the same?
+        let Some(interface) = args.platform else {
+            return Err(Error::MissingConfig);
+        };
+        let Some(ref owner) = &args.owner else {
+            return Err(Error::MissingConfig);
+        };
+        let Some(ref repo) = &args.repo else {
+            return Err(Error::MissingConfig);
+        };
+        let Some(ref url) = &args.url else {
+            return Err(Error::MissingConfig);
+        };
+        let Some(id) = args.id else {
+            return Err(Error::MissingConfig);
+        };
+        let Some(ref auth) = &args.token else {
+            return Err(Error::MissingConfig);
+        };
+        let Some(ref comments) = &args.fname else {
+            return Err(Error::MissingConfig);
+        };
+
         Ok(Review {
-            interface: args.platform,
-            owner: args.owner.to_owned(),
-            repo: args.repo.to_owned(),
-            url: args.url.to_owned(),
-            id: args.id,
-            auth: args.token.to_owned(),
-            comments: args.fname.to_owned(),
+            interface,
+            owner: owner.to_owned(),
+            repo: repo.to_owned(),
+            url: url.to_owned(),
+            id,
+            auth: auth.to_owned(),
+            comments: comments.to_owned(),
         })
     }
 
@@ -269,7 +292,7 @@ enum Command {
 #[command(author, version, about, long_about = None)]
 struct Args {
     #[arg(short = 't', long)]
-    token: String,
+    token: Option<String>,
     // XXX: all of those work, but which one is right
     // #[arg(value_enum)]
     // #[arg(short='t', long, value_enum)]
@@ -277,17 +300,17 @@ struct Args {
     #[clap(value_enum)]
     command: Option<Command>,
     #[arg(short = 'u', long)]
-    url: String,
+    url: Option<String>,
     #[arg(value_enum, short = 'p', long)]
-    platform: ReviewInterface,
+    platform: Option<ReviewInterface>,
     #[arg(short = 'o', long)]
-    owner: String,
+    owner: Option<String>,
     #[arg(short = 'r', long)]
-    repo: String,
+    repo: Option<String>,
     #[arg(short = 'i', long)]
-    id: u32,
+    id: Option<u32>,
     #[arg(short = 'f', long)]
-    fname: String,
+    fname: Option<String>,
 }
 
 fn serve_comments(review: &Review) -> Result<(), Error> {
