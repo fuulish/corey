@@ -185,8 +185,11 @@ impl Review {
         let Some(ref auth) = &args.token else {
             return Err(Error::MissingConfig);
         };
-        let Some(ref comments) = &args.fname else {
-            return Err(Error::MissingConfig);
+        // XXX: input parsing might be easier with sensible default handling
+        //      https://stackoverflow.com/questions/55133351/is-there-a-way-to-get-clap-to-use-default-values-from-a-file
+        let comments = match &args.fname {
+            Some(v) => v.to_owned(),
+            None => ".review_comments.yml".to_owned(),
         };
 
         Ok(Review {
