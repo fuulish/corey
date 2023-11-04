@@ -268,6 +268,10 @@ impl Review {
                                                                             // of this function)
         serde_yaml::from_reader(f).map_err(Error::from_yaml_error)
     }
+
+    pub fn update_config(&mut self, args: &Args) -> Result<(), Error> {
+        Ok(())
+    }
 }
 
 const NCOL: usize = 80;
@@ -352,10 +356,15 @@ fn main() -> Result<(), Error> {
         None => Command::Run,
     };
 
-    let pr = match command {
+    let mut pr = match command {
         Command::Init => Review::from_args(&args)?,
         Command::Update | Command::Run => Review::from_config(&config)?,
     };
+
+    match command {
+        Command::Update => pr.update_config(&args)?,
+        _ => (),
+    }
 
     match command {
         Command::Init | Command::Update => pr.save_config()?,
