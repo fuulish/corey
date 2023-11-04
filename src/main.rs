@@ -1,3 +1,6 @@
+//! Review LSP
+//!
+//! Provides LSP interfaces for reviewing code inline in editor.
 use reqwest;
 use serde::{Deserialize, Serialize};
 
@@ -72,12 +75,7 @@ enum ReviewInterface {
     GitHub,
 }
 
-// XXX: a review should neglect the infrastructure things (to a large degree)
-//      keep a list of comments and the views into it being original comments and replies
-//      -> one private member and two public view
-//      on the contrary, we'll keep only the review infrastructure things here
-//      ...and treat the comments and a view into it separately
-// XXX: move infrastructure related things to ReviewInterface (and have that use the platform enum)
+/// A `Review` contains only the meta information
 #[derive(Debug, Serialize, Deserialize)]
 struct Review {
     interface: ReviewInterface,
@@ -86,14 +84,11 @@ struct Review {
     auth: String,
     url: String,
     id: u32,
-    comments: String, // XXX: I really do not want this to be part of this struct
-                      //      XXX: re-extract and save comments to separate file
+    comments: String,
 }
 
-// XXX: having reviewcomments in here would have been nice
-//      however, it generates a self-referential struct, which does not work out of the box in rust
-//      it would be possible to setup starter and replies as Option types and only fill them after
-//      having set up the base struct...
+// cannot simply have original comments and references to it in one struct (self-referential)
+// hence we provide a Conversation as a view into a list of ReviewComments
 struct Conversation<'a> {
     pub starter: HashMap<u32, &'a ReviewComment>,
     pub replies: HashMap<u32, Vec<&'a ReviewComment>>,
@@ -138,9 +133,7 @@ impl<'a> Conversation<'a> {
     }
     pub fn print(&self) {
         // pretty printing of conversations
-        for (id, comment) in self.starter.iter() {
-            // XXX: I always forget, do we need this explicit
-            //      iter call?
+        for (id, comment) in &self.starter {
             println!("|{}|", "+".repeat(NCOL));
             println!("{}", comment.path);
             println!("{}", comment.diff_hunk);
@@ -187,7 +180,7 @@ impl Review {
         let Some(ref auth) = &args.token else {
             return Err(Error::MissingConfig);
         };
-        // XXX: input parsing might be easier with sensible default handling
+        // XXX: input parsing might be easier with sensible default handling directly through clap
         //      https://stackoverflow.com/questions/55133351/is-there-a-way-to-get-clap-to-use-default-values-from-a-file
         let comments = match &args.fname {
             Some(v) => v.to_owned(),
@@ -204,20 +197,6 @@ impl Review {
             comments: comments.to_owned(),
         })
     }
-
-    /* update comments or both comments and comments file
-    fn update_comments(&mut self) -> Result<(), Error> {
-        self.comments = Review::get_comments(
-            self.interface,
-            &self.owner,
-            &self.repo,
-            &self.url,
-            &self.auth,
-            self.id,
-        )?;
-        Ok(())
-    }
-    */
 
     fn get_authentication(auth: &str) -> Result<String, Error> {
         fs::read_to_string(auth).map_err(Error::from_io_error)
