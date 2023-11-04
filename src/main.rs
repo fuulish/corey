@@ -210,7 +210,7 @@ impl Review {
     fn get_authentication(auth: &str) -> Result<String, Error> {
         fs::read_to_string(auth).map_err(Error::from_io_error)
     }
-    fn get_comments(&self) -> Result<Vec<ReviewComment>, Error> {
+    async fn get_comments(&self) -> Result<Vec<ReviewComment>, Error> {
         let request_url = match self.interface {
             ReviewInterface::GitHub => {
                 format!(
@@ -225,14 +225,15 @@ impl Review {
 
         let token = Review::get_authentication(&self.auth)?;
 
-        let client = reqwest::blocking::Client::new()
+        let response = reqwest::Client::new()
             .get(request_url)
             .header("User-Agent", "clireview/0.0.1")
-            .bearer_auth(token);
+            .bearer_auth(token)
+            .send()
+            .await
+            .map_err(Error::from_reqwest_error)?;
 
-        let response = client.send().map_err(Error::from_reqwest_error)?;
-
-        response.json().map_err(Error::from_reqwest_error)
+        response.json().await.map_err(Error::from_reqwest_error)
     }
 
     pub fn save_config(&self) -> Result<(), Error> {
@@ -332,8 +333,8 @@ struct Args {
     fname: Option<String>,
 }
 
-fn serve_comments(review: &Review) -> Result<(), Error> {
-    let comments = review.get_comments()?;
+async fn serve_comments(review: &Review) -> Result<(), Error> {
+    let comments = review.get_comments().await?;
     review.save_comments(&comments)?;
 
     let conversation = Conversation::from_review_comments(&comments)?;
@@ -359,9 +360,9 @@ fn serve_comments(review: &Review) -> Result<(), Error> {
 //          - that makes reading it from the serving side easier (when the whole things is served
 //          from editor)
 
-// #[tokio::main] - using the blocking version should be fine for now
 // this file should get updated on demand or rarely
-fn main() -> Result<(), Error> {
+#[tokio::main]
+async fn main() -> Result<(), Error> {
     let args = Args::parse();
 
     let command = match &args.command {
@@ -382,7 +383,7 @@ fn main() -> Result<(), Error> {
 
     match command {
         Command::Init | Command::Update => pr.save_config()?,
-        Command::Run => serve_comments(&pr)?,
+        Command::Run => serve_comments(&pr).await?,
     }
     Ok(())
 }
