@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 use core::fmt;
 use std::{collections::HashMap, fs};
 
+const CONFIG_NAME: &'static str = ".review.yml";
+
 #[allow(dead_code)]
 #[derive(Debug)]
 enum Error {
@@ -250,7 +252,7 @@ impl Review {
         let f = std::fs::OpenOptions::new()
             .write(true)
             .create(true)
-            .open("review.yml")
+            .open(CONFIG_NAME) // XXX: not configurable by default
             .expect("Couldn't open file");
         serde_yaml::to_writer(f, &self).map_err(Error::from_yaml_error)
     }
@@ -385,8 +387,6 @@ fn serve_comments(review: &Review) -> Result<(), Error> {
 fn main() -> Result<(), Error> {
     let args = Args::parse();
 
-    let config = ".review.yml"; // not configurable on purpose
-
     let command = match &args.command {
         Some(c) => c.clone(), // Command type could be `Copy`, though
         None => Command::Run,
@@ -394,7 +394,7 @@ fn main() -> Result<(), Error> {
 
     let mut pr = match command {
         Command::Init => Review::from_args(&args)?,
-        Command::Update | Command::Run => Review::from_config(&config)?,
+        Command::Update | Command::Run => Review::from_config(CONFIG_NAME)?,
     };
 
     match command {
