@@ -275,7 +275,7 @@ struct Args {
     // #[arg(short='t', long, value_enum)]
     // #[clap(value_enum)]
     #[clap(value_enum)]
-    command: Command,
+    command: Option<Command>,
     #[arg(short = 'u', long)]
     url: String,
     #[arg(value_enum, short = 'p', long)]
@@ -286,14 +286,24 @@ struct Args {
     repo: String,
     #[arg(short = 'i', long)]
     id: u32,
-    #[arg(short = 'c', long)]
-    config: Option<String>,
     #[arg(short = 'f', long)]
     fname: String,
 }
 
+fn serve_comments(review: &Review) -> Result<(), Error> {
+    let comments = review.get_comments()?;
+    review.save_comments(&comments)?;
+
+    let conversation = Conversation::from_review_comments(&comments)?;
+
+    conversation.print();
+
+    Ok(())
+}
+
 // XXX: decide on semantics
-//      init/update can refer solely to the configuration
+//      init/update can refer solely to the configuration (there will be no updating of comments at
+//      that stage)
 //          e.g., only update the PR number that you are referring to
 //          have a file watcher on running instance that notices if review things change
 //              review things can be either the configuration or the pointed to comments file
@@ -312,31 +322,21 @@ struct Args {
 fn main() -> Result<(), Error> {
     let args = Args::parse();
 
-    let pr = match args.command {
-        Command::Init => {
-            let pr = Review::from_args(&args)?;
-            pr.save_config()?;
-            pr
-        } // XXX: only create configuration
-        Command::Update => match args.config {
-            // XXX: only update configuration
-            //      XXX: make sure that only this is set and other options are ignored
-            Some(c) => Review::from_config(&c)?,
-            None => return Err(Error::MissingConfig),
-        },
-        Command::Run => return Err(Error::NotImplemented),
+    let config = ".review.yml"; // not configurable on purpose
+
+    let command = match &args.command {
+        Some(c) => c.clone(), // Command type could be `Copy`, though
+        None => Command::Run,
     };
 
-    // XXX: for init/update -> download comments into a Vec<ReviewComment>
+    let pr = match command {
+        Command::Init => Review::from_args(&args)?,
+        Command::Update | Command::Run => Review::from_config(&config)?,
+    };
 
-    // XXX: save into args.config (how about making that optional?)
-    //      i.e., how to represent optional arguments in serde
-
-    let comments = pr.get_comments()?;
-    pr.save_comments(&comments)?;
-
-    let conversation = Conversation::from_review_comments(&comments)?;
-
-    conversation.print();
+    match command {
+        Command::Init | Command::Update => pr.save_config()?,
+        Command::Run => serve_comments(&pr)?,
+    }
     Ok(())
 }
