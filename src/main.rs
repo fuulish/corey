@@ -160,6 +160,15 @@ impl<'a> Conversation<'a> {
     }
 }
 
+fn save_to_disk<T: Serialize>(fname: &str, data: &T) -> Result<(), Error> {
+    let f = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .open(fname)
+        .expect("Couldn't open file");
+    serde_yaml::to_writer(f, data).map_err(Error::from_yaml_error)
+}
+
 impl Review {
     pub fn from_args(args: &Args) -> Result<Self, Error> {
         let Some(interface) = args.platform else {
@@ -226,23 +235,12 @@ impl Review {
         response.json().map_err(Error::from_reqwest_error)
     }
 
-    // XXX: deduplicate file saving
     pub fn save_config(&self) -> Result<(), Error> {
-        let f = std::fs::OpenOptions::new()
-            .write(true)
-            .create(true)
-            .open(CONFIG_NAME) // XXX: not configurable by default
-            .expect("Couldn't open file");
-        serde_yaml::to_writer(f, &self).map_err(Error::from_yaml_error)
+        save_to_disk(CONFIG_NAME, self)
     }
 
     pub fn save_comments(&self, comments: &Vec<ReviewComment>) -> Result<(), Error> {
-        let f = std::fs::OpenOptions::new()
-            .write(true)
-            .create(true)
-            .open(&self.comments)
-            .expect("Couldn't open file");
-        serde_yaml::to_writer(f, comments).map_err(Error::from_yaml_error)
+        save_to_disk(&self.comments, comments)
     }
 
     pub fn from_config(config: &str) -> Result<Self, Error> {
