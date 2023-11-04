@@ -270,6 +270,39 @@ impl Review {
     }
 
     pub fn update_config(&mut self, args: &Args) -> Result<(), Error> {
+        self.interface = match &args.platform {
+            Some(v) => v.to_owned(),
+            None => self.interface,
+        };
+
+        self.owner = match &args.owner {
+            Some(v) => v.to_owned(),
+            None => self.owner.to_owned(), // XXX: annoying copies should be avoided
+        };
+
+        self.repo = match &args.repo {
+            Some(v) => v.to_owned(),
+            None => self.repo.to_owned(),
+        };
+        self.url = match &args.url {
+            Some(v) => v.to_owned(),
+            None => self.url.to_owned(),
+        };
+        self.id = match args.id {
+            Some(v) => v,
+            None => self.id,
+        };
+
+        self.auth = match &args.token {
+            Some(v) => v.to_owned(),
+            None => self.auth.to_owned(),
+        };
+
+        self.comments = match &args.fname {
+            Some(v) => v.to_owned(),
+            None => self.comments.to_owned(),
+        };
+
         Ok(())
     }
 }
