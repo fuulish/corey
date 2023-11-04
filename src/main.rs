@@ -401,6 +401,7 @@ fn main() -> Result<(), Error> {
         Command::Update => pr.update_config(&args)?,
         _ => (),
     }
+    let pr = pr;
 
     match command {
         Command::Init | Command::Update => pr.save_config()?,
