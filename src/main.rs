@@ -7,8 +7,6 @@ use serde::{Deserialize, Serialize};
 use core::fmt;
 use std::{collections::HashMap, fs};
 
-const CONFIG_NAME: &'static str = ".review.yml";
-
 #[allow(dead_code)]
 #[derive(Debug)]
 enum Error {
@@ -170,6 +168,8 @@ fn save_to_disk<T: Serialize>(fname: &str, data: &T) -> Result<(), Error> {
 }
 
 impl Review {
+    const CONFIG_NAME: &'static str = ".review.yml";
+
     pub fn from_args(args: &Args) -> Result<Self, Error> {
         let Some(interface) = args.platform else {
             return Err(Error::MissingConfig);
@@ -237,7 +237,7 @@ impl Review {
     }
 
     pub fn save_config(&self) -> Result<(), Error> {
-        save_to_disk(CONFIG_NAME, self)
+        save_to_disk(Self::CONFIG_NAME, self)
     }
 
     pub fn save_comments(&self, comments: &Vec<ReviewComment>) -> Result<(), Error> {
@@ -372,7 +372,7 @@ async fn main() -> Result<(), Error> {
 
     let mut pr = match command {
         Command::Init => Review::from_args(&args)?,
-        Command::Update | Command::Run => Review::from_config(CONFIG_NAME)?,
+        Command::Update | Command::Run => Review::from_config(Review::CONFIG_NAME)?,
     };
 
     match command {
