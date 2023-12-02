@@ -7,6 +7,10 @@ use serde::{Deserialize, Serialize};
 use core::fmt;
 use std::{collections::HashMap, fs};
 
+use tower_lsp::jsonrpc;
+use tower_lsp::lsp_types;
+use tower_lsp::{Client, LanguageServer, LspService, Server};
+
 #[allow(dead_code)]
 #[derive(Debug)]
 enum Error {
@@ -331,6 +335,15 @@ struct Args {
     id: Option<u32>,
     #[arg(short = 'f', long)]
     fname: Option<String>,
+}
+
+impl LanguageServer for Review {
+    fn initialize(&self, _: lsp_types::InitializeParams) -> Result<lsp_types::InitializeResult> {
+        Err(jsonrpc::Error::new(jsonrpc::ErrorCode::code(123)))
+    }
+    fn shutdown(&self) -> Result<()> {
+        Err(jsonrpc::Error::new(jsonrpc::ErrorCode::code(123)))
+    }
 }
 
 async fn serve_comments(review: &Review) -> Result<(), Error> {
