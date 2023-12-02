@@ -338,11 +338,14 @@ struct Args {
 }
 
 impl LanguageServer for Review {
-    fn initialize(&self, _: lsp_types::InitializeParams) -> Result<lsp_types::InitializeResult> {
-        Err(jsonrpc::Error::new(jsonrpc::ErrorCode::code(123)))
+    fn initialize(
+        &self,
+        _: lsp_types::InitializeParams,
+    ) -> jsonrpc::Result<lsp_types::InitializeResult> {
+        Err(jsonrpc::Error::new(jsonrpc::ErrorCode::ServerError(123)))
     }
-    fn shutdown(&self) -> Result<()> {
-        Err(jsonrpc::Error::new(jsonrpc::ErrorCode::code(123)))
+    fn shutdown(&self) -> jsonrpc::Result<()> {
+        Err(jsonrpc::Error::new(jsonrpc::ErrorCode::ServerError(123)))
     }
 }
 
