@@ -338,6 +338,15 @@ struct Args {
     fname: Option<String>,
 }
 
+// XXX: use `register_capability` to register new capabilities
+// XXX: text synchronization capabilities as in tower-lsp-boilerplate
+// XXX: publish_diagnostics on `open` and on `did_change` -> that might need document
+//      synchronization capabilities
+// XXX: need to publish new diagnostics upon review change (i.e., another file watcher)
+//      -> how is that done? just sent asynchronously?
+// XXX: include client in backend
+//      or rather, create a backend struct that includes a review
+
 #[tower_lsp::async_trait] // XXX is this needed? Y: otherwise Rust will complain about
                           // lifetime bounds of trait
 impl LanguageServer for Review {
