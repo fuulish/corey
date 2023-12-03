@@ -344,6 +344,7 @@ struct Args {
 //      synchronization capabilities
 // XXX: need to publish new diagnostics upon review change (i.e., another file watcher)
 //      -> how is that done? just sent asynchronously?
+//      -> did_change_configuration might be of use here as well
 // XXX: include client in backend
 //      or rather, create a backend struct that includes a review
 
@@ -360,6 +361,7 @@ impl LanguageServer for Review {
             capabilities: ServerCapabilities {
                 // The only thing we want to provide are `textDocument/diagnostic` respsonses.
                 // This does not need to register its own client and server capabilities.
+                // ...however, the server can register for the textDocument/diagnostic capability
                 ..ServerCapabilities::default()
             },
         })
