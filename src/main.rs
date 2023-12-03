@@ -3,6 +3,7 @@
 //! Provides LSP interfaces for reviewing code inline in editor.
 use reqwest;
 use serde::{Deserialize, Serialize};
+use tower_lsp::lsp_types::ServerCapabilities;
 
 use core::fmt;
 use std::{collections::HashMap, fs};
@@ -344,10 +345,18 @@ impl LanguageServer for Review {
         &self,
         _: lsp_types::InitializeParams,
     ) -> jsonrpc::Result<lsp_types::InitializeResult> {
-        Err(jsonrpc::Error::new(jsonrpc::ErrorCode::ServerError(123)))
+        Ok(lsp_types::InitializeResult {
+            server_info: None,
+            // offset_encoding: None, // XXX: was in tower-lsp-boilerplate, why not here?
+            capabilities: ServerCapabilities {
+                // The only thing we want to provide are `textDocument/diagnostic` respsonses.
+                // This does not need to register its own client and server capabilities.
+                ..ServerCapabilities::default()
+            },
+        })
     }
     async fn shutdown(&self) -> jsonrpc::Result<()> {
-        Err(jsonrpc::Error::new(jsonrpc::ErrorCode::ServerError(123)))
+        Ok(())
     }
 }
 
