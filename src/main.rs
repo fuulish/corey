@@ -337,14 +337,16 @@ struct Args {
     fname: Option<String>,
 }
 
+#[tower_lsp::async_trait] // XXX is this needed? Y: otherwise Rust will complain about
+                          // lifetime bounds of trait
 impl LanguageServer for Review {
-    fn initialize(
+    async fn initialize(
         &self,
         _: lsp_types::InitializeParams,
     ) -> jsonrpc::Result<lsp_types::InitializeResult> {
         Err(jsonrpc::Error::new(jsonrpc::ErrorCode::ServerError(123)))
     }
-    fn shutdown(&self) -> jsonrpc::Result<()> {
+    async fn shutdown(&self) -> jsonrpc::Result<()> {
         Err(jsonrpc::Error::new(jsonrpc::ErrorCode::ServerError(123)))
     }
 }
