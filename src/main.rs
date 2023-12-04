@@ -376,6 +376,9 @@ impl LanguageServer for Backend {
                 // The only thing we want to provide are `textDocument/diagnostic` respsonses.
                 // This does not need to register its own client and server capabilities.
                 // ...however, the server can register for the textDocument/diagnostic capability
+                text_document_sync: Some(lsp_types::TextDocumentSyncCapability::Kind(
+                    lsp_types::TextDocumentSyncKind::FULL,
+                )),
                 ..ServerCapabilities::default()
             },
         })
