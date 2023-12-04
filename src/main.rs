@@ -386,6 +386,40 @@ impl LanguageServer for Backend {
     async fn shutdown(&self) -> jsonrpc::Result<()> {
         Ok(())
     }
+
+    async fn did_open(&self, params: lsp_types::DidOpenTextDocumentParams) {
+        self.client
+            .log_message(lsp_types::MessageType::INFO, "file opened!")
+            .await;
+        self.on_change(lsp_types::TextDocumentItem {
+            uri: params.text_document.uri,
+            language_id: "X".to_owned(),
+            text: params.text_document.text,
+            version: params.text_document.version,
+        })
+        .await
+    }
+
+    async fn did_change(&self, mut params: lsp_types::DidChangeTextDocumentParams) {
+        self.on_change(lsp_types::TextDocumentItem {
+            uri: params.text_document.uri,
+            language_id: "X".to_owned(),
+            text: std::mem::take(&mut params.content_changes[0].text),
+            version: params.text_document.version,
+        })
+        .await
+    }
+
+    async fn did_save(&self, _: lsp_types::DidSaveTextDocumentParams) {
+        self.client
+            .log_message(lsp_types::MessageType::INFO, "file saved!")
+            .await;
+    }
+    async fn did_close(&self, _: lsp_types::DidCloseTextDocumentParams) {
+        self.client
+            .log_message(lsp_types::MessageType::INFO, "file closed!")
+            .await;
+    }
 }
 
 async fn serve_comments(review: Review) -> Result<(), Error> {
