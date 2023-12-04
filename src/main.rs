@@ -371,7 +371,7 @@ impl LanguageServer for Review {
     }
 }
 
-async fn serve_comments(review: &Review) -> Result<(), Error> {
+async fn serve_comments(review: Review) -> Result<(), Error> {
     let comments = review.get_comments().await?;
     review.save_comments(&comments)?;
 
@@ -421,7 +421,7 @@ async fn main() -> Result<(), Error> {
 
     match command {
         Command::Init | Command::Update => pr.save_config()?,
-        Command::Run => serve_comments(&pr).await?,
+        Command::Run => serve_comments(pr).await?,
     }
     Ok(())
 }
