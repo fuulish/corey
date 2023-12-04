@@ -348,6 +348,20 @@ struct Args {
 // XXX: include client in backend
 //      or rather, create a backend struct that includes a review
 
+struct Backend {
+    client: Client,
+    review: Review,
+}
+
+impl Backend {
+    async fn on_change(&self, params: lsp_types::TextDocumentItem) {
+        let diagnostics: Vec<lsp_types::Diagnostic> = Vec::new();
+        self.client
+            .publish_diagnostics(params.uri.clone(), diagnostics, Some(params.version))
+            .await;
+    }
+}
+
 #[tower_lsp::async_trait] // XXX is this needed? Y: otherwise Rust will complain about
                           // lifetime bounds of trait
 impl LanguageServer for Review {
