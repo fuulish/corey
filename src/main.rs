@@ -364,7 +364,7 @@ impl Backend {
 
 #[tower_lsp::async_trait] // XXX is this needed? Y: otherwise Rust will complain about
                           // lifetime bounds of trait
-impl LanguageServer for Review {
+impl LanguageServer for Backend {
     async fn initialize(
         &self,
         _: lsp_types::InitializeParams,
