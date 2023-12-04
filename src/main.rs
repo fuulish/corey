@@ -426,6 +426,12 @@ async fn serve_comments(review: Review) -> Result<(), Error> {
     let comments = review.get_comments().await?;
     review.save_comments(&comments)?;
 
+    let (service, socket) = LspService::new(|client| Backend { client, review });
+
+    let stdin = tokio::io::stdin();
+    let stdout = tokio::io::stdout();
+
+    Server::new(stdin, stdout, socket).serve(service).await;
     let conversation = Conversation::from_review_comments(&comments)?;
 
     conversation.print();
