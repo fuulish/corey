@@ -93,16 +93,15 @@ struct Review {
 // cannot simply have original comments and references to it in one struct (self-referential)
 // hence we provide a Conversation as a view into a list of ReviewComments
 struct Conversation<'a> {
-    pub starter: HashMap<u32, &'a ReviewComment>,
+    pub starter: Vec<&'a ReviewComment>,
     pub replies: HashMap<u32, Vec<&'a ReviewComment>>,
 }
 
 impl<'a> Conversation<'a> {
     pub fn from_review_comments(comments: &'a Vec<ReviewComment>) -> Result<Self, Error> {
-        let starter: HashMap<_, _> = comments
+        let starter: Vec<_> = comments
             .iter()
             .filter(|x| None == x.in_reply_to_id)
-            .map(|c| (c.id, c))
             .collect();
 
         let mut replies: HashMap<u32, Vec<&ReviewComment>> = HashMap::new();
@@ -111,14 +110,14 @@ impl<'a> Conversation<'a> {
         //      however, for the typical size of reviews, we are talking
         //      about, this will not be expensive either
         //          XXX: optimize, when the need arises
-        for (k, _) in starter.iter() {
+        for k in starter.iter() {
             replies.insert(
-                *k,
+                k.id,
                 comments
                     .iter()
                     .filter(|x| {
                         if let Some(id) = x.in_reply_to_id {
-                            if id == *k {
+                            if id == k.id {
                                 true
                             } else {
                                 false
@@ -136,7 +135,7 @@ impl<'a> Conversation<'a> {
     }
     pub fn print(&self) {
         // pretty printing of conversations
-        for (id, comment) in &self.starter {
+        for comment in &self.starter {
             println!("|{}|", "+".repeat(NCOL));
             println!("{}", comment.path);
             println!("{}", comment.diff_hunk);
@@ -145,7 +144,7 @@ impl<'a> Conversation<'a> {
                 name = comment.user.login,
                 body = comment.body
             );
-            match self.replies.get(id) {
+            match self.replies.get(&comment.id) {
                 None => {
                     println!("|{}|", "-".repeat(NCOL));
                     continue;
