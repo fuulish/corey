@@ -1,0 +1,14 @@
+== Setup
+
+```
+cargo build
+```
+
+Typically, you would need to setup a token to interact with GitHub.
+The token can be read from a file.
+If doing so, please remember to remove the newline at the end of the file.
+This could be achieved as such:
+
+```
+tr -d '\n' < token_full > TOKEN_working
+```
