@@ -335,6 +335,7 @@ enum Command {
     Init,
     Update,
     Run,
+    Print,
 }
 
 // XXX: provide optional remote, otherwise see if .git directory is present and use default remote
@@ -472,13 +473,20 @@ async fn serve_comments(review: Review) -> Result<(), Error> {
 
     let (service, socket) = LspService::new(|client| Backend { client, review });
 
-    let conversation = Conversation::from_review_comments(&comments)?;
-    conversation.print();
-
     let stdin = tokio::io::stdin();
     let stdout = tokio::io::stdout();
 
     Server::new(stdin, stdout, socket).serve(service).await;
+
+    Ok(())
+}
+
+async fn print_comments(review: Review) -> Result<(), Error> {
+    let comments = review.get_comments().await?;
+    review.save_comments(&comments)?;
+
+    let conversation = Conversation::from_review_comments(&comments)?;
+    conversation.print();
 
     Ok(())
 }
@@ -511,7 +519,9 @@ async fn main() -> Result<(), Error> {
 
     let mut pr = match command {
         Command::Init => Review::from_args(&args)?,
-        Command::Update | Command::Run => Review::from_config(Review::CONFIG_NAME)?,
+        Command::Update | Command::Run | Command::Print => {
+            Review::from_config(Review::CONFIG_NAME)?
+        }
     };
 
     match command {
@@ -523,6 +533,7 @@ async fn main() -> Result<(), Error> {
     match command {
         Command::Init | Command::Update => pr.save_config()?,
         Command::Run => serve_comments(pr).await?,
+        Command::Print => print_comments(pr).await?,
     }
     Ok(())
 }
