@@ -53,9 +53,25 @@ struct ReviewComment {
     /// can be null through overwritten commit (force-push/rebase)
     line: Option<u32>,
     original_line: u32,
+    start_line: Option<u32>,
+    original_start_line: Option<u32>,
     user: User,
     diff_hunk: String,
-    path: String,
+    path: String, // XXX: should be OsString or something like that
+}
+
+impl ReviewComment {
+    fn line_range(&self) -> lsp_types::Range {
+        let end = self.original_line + 1;
+        let beg = match self.original_start_line {
+            Some(l) => l,
+            None => end - 1,
+        };
+        lsp_types::Range::new(
+            lsp_types::Position::new(beg, 0),
+            lsp_types::Position::new(end, 0),
+        )
+    }
 }
 
 // rustlings does it like this:
@@ -159,6 +175,21 @@ impl<'a> Conversation<'a> {
                 }
             }
         }
+    }
+
+    pub fn serialize(&self, start: &ReviewComment) -> String {
+        let mut conv = start.body.clone();
+
+        match self.replies.get(&start.id) {
+            None => (),
+            Some(rid) => {
+                for reply in rid {
+                    conv.push_str(&reply.body);
+                }
+            }
+        }
+
+        conv
     }
 }
 
@@ -354,7 +385,21 @@ struct Backend {
 
 impl Backend {
     async fn on_change(&self, params: lsp_types::TextDocumentItem) {
-        let diagnostics: Vec<lsp_types::Diagnostic> = Vec::new();
+        let comments = self.review.get_comments().await.unwrap();
+        let conversation = Conversation::from_review_comments(&comments).unwrap();
+
+        let uri = params.uri.as_str();
+
+        let diagnostics = conversation
+            .starter
+            .iter()
+            .filter(|x| uri.contains(&x.path))
+            // XXX: the line_range below is only correct if we are on the same version as on review
+            //      XXX: need to fix this line association using git internals
+            //      for now, this is good enough
+            .map(|&x| lsp_types::Diagnostic::new_simple(x.line_range(), conversation.serialize(&x)))
+            .collect();
+
         self.client
             .publish_diagnostics(params.uri.clone(), diagnostics, Some(params.version))
             .await;
