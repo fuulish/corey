@@ -468,7 +468,8 @@ impl LanguageServer for Backend {
 }
 
 async fn serve_comments(review: Review) -> Result<(), Error> {
-    let comments = review.get_comments().await?;
+    let comments = review.get_comments().await?; // XXX: always update from fresh source? (or use
+                                                 //      available data/comments)
     review.save_comments(&comments)?;
 
     let (service, socket) = LspService::new(|client| Backend { client, review });
