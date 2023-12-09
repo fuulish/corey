@@ -178,13 +178,13 @@ impl<'a> Conversation<'a> {
     }
 
     pub fn serialize(&self, start: &ReviewComment) -> String {
-        let mut conv = start.body.clone();
+        let mut conv = format!("{}: {}", start.user.login, start.body);
 
         match self.replies.get(&start.id) {
             None => (),
             Some(rid) => {
                 for reply in rid {
-                    conv.push_str(&reply.body);
+                    conv.push_str(&format!("\n{}: {}", reply.user.login, reply.body));
                 }
             }
         }
