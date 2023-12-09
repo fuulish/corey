@@ -60,6 +60,12 @@ struct ReviewComment {
     path: String, // XXX: should be OsString or something like that
 }
 
+// XXX: - ensure line-in-review to line-in-editor correspondence
+//      - double-check meaning of lines in GH API
+//      - only original_line appears to be mandatory
+//      - in the only example used so far, it appears that we are hitting the correct lines only by
+//      accident
+//      - use VCS (preferably git) tracking to find the correct line in the current file
 impl ReviewComment {
     fn line_range(&self) -> lsp_types::Range {
         let end = self.original_line + 1;
