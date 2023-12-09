@@ -507,6 +507,10 @@ async fn print_comments(review: Review) -> Result<(), Error> {
 //      - make the configuration file some sort of default
 //          - that makes reading it from the serving side easier (when the whole things is served
 //          from editor)
+//
+// XXX: need some more tracking with respect to state of current files
+//      -> use VCS in place to verify file version correspondence
+//      -> are the files/lines we are looking at the same that the review is referring to?
 
 // this file should get updated on demand or rarely
 #[tokio::main]
