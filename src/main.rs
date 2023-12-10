@@ -66,11 +66,14 @@ struct ReviewComment {
 //      - in the only example used so far, it appears that we are hitting the correct lines only by
 //      accident
 //      - use VCS (preferably git) tracking to find the correct line in the current file
+// XXX: GitHub uses 1-based lines and lsp_types::Range uses zero-based one
 impl ReviewComment {
+    // XXX: this is still very much GitHub specific
     fn line_range(&self) -> lsp_types::Range {
-        let end = self.original_line + 1;
+        let end = self.original_line; // range is exclusive, so 1-based inclusive end is fine for
+                                      // zero-based exclusive end
         let beg = match self.original_start_line {
-            Some(l) => l,
+            Some(l) => l - 1, // start needs to be corrected, though
             None => end - 1,
         };
         lsp_types::Range::new(
