@@ -392,8 +392,25 @@ struct Backend {
 
 impl Backend {
     async fn on_change(&self, params: lsp_types::TextDocumentItem) {
-        let comments = self.review.get_comments().await.unwrap();
-        let conversation = Conversation::from_review_comments(&comments).unwrap();
+        let comments = match self.review.get_comments().await {
+            Ok(v) => v,
+            Err(e) => {
+                self.client
+                    .log_message(lsp_types::MessageType::ERROR, e.to_string())
+                    .await;
+                return;
+            }
+        };
+
+        let conversation = match Conversation::from_review_comments(&comments) {
+            Ok(v) => v,
+            Err(e) => {
+                self.client
+                    .log_message(lsp_types::MessageType::ERROR, e.to_string())
+                    .await;
+                return;
+            }
+        };
 
         let uri = params.uri.as_str();
 
