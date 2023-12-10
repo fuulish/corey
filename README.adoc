@@ -12,3 +12,8 @@ This could be achieved as such:
 ```
 tr -d '\n' < token_full > TOKEN_working
 ```
+
+warning or error based on resolution of comment
+		based on state of code (i.e., was it changed?)
+			but that's misleading, potentially, because one might be commenting on the new state
+		   resolution would be really nice to have
