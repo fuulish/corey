@@ -67,6 +67,7 @@ struct ReviewComment {
 //      accident
 //      - use VCS (preferably git) tracking to find the correct line in the current file
 // XXX: GitHub uses 1-based lines and lsp_types::Range uses zero-based one
+// XXX: fix understanding, but original is referring to a file from which was moved to another file
 impl ReviewComment {
     // XXX: this is still very much GitHub specific
     fn line_range(&self) -> lsp_types::Range {
