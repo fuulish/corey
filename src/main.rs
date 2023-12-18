@@ -12,6 +12,8 @@ use tower_lsp::jsonrpc;
 use tower_lsp::lsp_types;
 use tower_lsp::{Client, LanguageServer, LspService, Server};
 
+use git2;
+
 #[allow(dead_code)]
 #[derive(Debug)]
 enum Error {
@@ -21,6 +23,7 @@ enum Error {
     Gathering(reqwest::Error),
     IOError(std::io::Error),
     YAML(serde_yaml::Error),
+    Git(git2::Error),
 }
 
 impl std::error::Error for Error {}
@@ -28,6 +31,7 @@ impl std::error::Error for Error {}
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         f.write_str(match self {
+            Error::Git(_) => "Git error",
             Error::YAML(_) => "YAML processing error",
             Error::Gathering(_) => "gathering error",
             Error::NotImplemented => "not implemented",
@@ -95,6 +99,9 @@ impl Error {
     fn from_yaml_error(err: serde_yaml::Error) -> Error {
         Error::YAML(err)
     }
+    fn from_git_error(err: git2::Error) -> Error {
+        Error::Git(err)
+    }
 }
 
 // XXX: PartialEq needed for comparison in `from_args`
@@ -103,6 +110,37 @@ impl Error {
 enum ReviewInterface {
     GitHub,
 }
+
+enum VCS {
+    Git(git2::Repository),
+}
+
+// XXX if it's only one member could use tuple struct
+struct Repo {
+    vcs: VCS,
+}
+
+impl Repo {
+    fn new(interface: &ReviewInterface) -> Result<Repo, Error> {
+        Ok(Repo {
+            vcs: match interface {
+                ReviewInterface::GitHub => {
+                    VCS::Git(git2::Repository::open(".").map_err(Error::from_git_error)?)
+                }
+            },
+        })
+    }
+}
+
+/* this seems unnecessary
+impl Drop for Repo {
+    fn drop(&mut self) {
+        match self.vcs {
+            VCS::Git(r) => r.drop(),
+        }
+    }
+}
+*/
 
 /// A `Review` contains only the meta information
 #[derive(Debug, Serialize, Deserialize)]
@@ -416,6 +454,16 @@ impl Backend {
             }
         };
 
+        let repo = match Repo::new(&self.review.interface) {
+            Ok(r) => r,
+            Err(e) => {
+                self.client
+                    .log_message(lsp_types::MessageType::ERROR, e.to_string())
+                    .await;
+                return;
+            }
+        };
+
         let uri = params.uri.as_str();
 
         let diagnostics = conversation
@@ -498,6 +546,8 @@ async fn serve_comments(review: Review) -> Result<(), Error> {
     let comments = review.get_comments().await?; // XXX: always update from fresh source? (or use
                                                  //      available data/comments)
     review.save_comments(&comments)?;
+
+    let repo = Repo::new(&review.interface)?;
 
     let (service, socket) = LspService::new(|client| Backend { client, review });
 
