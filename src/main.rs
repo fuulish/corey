@@ -121,11 +121,11 @@ struct Repo {
 }
 
 impl Repo {
-    fn new(interface: &ReviewInterface) -> Result<Repo, Error> {
+    fn new(interface: &ReviewInterface, local_repo: &str) -> Result<Repo, Error> {
         Ok(Repo {
             vcs: match interface {
                 ReviewInterface::GitHub => {
-                    VCS::Git(git2::Repository::open(".").map_err(Error::from_git_error)?)
+                    VCS::Git(git2::Repository::open(local_repo).map_err(Error::from_git_error)?)
                 }
             },
         })
@@ -152,6 +152,7 @@ struct Review {
     url: String,
     id: u32,
     comments: String,
+    local_repo: String,
 }
 
 // cannot simply have original comments and references to it in one struct (self-referential)
@@ -272,6 +273,12 @@ impl Review {
         let Some(ref auth) = &args.token else {
             return Err(Error::MissingConfig);
         };
+
+        let local_repo = match &args.local_repo {
+            Some(r) => r.to_owned(),
+            None => "./".to_owned(),
+        };
+
         // XXX: input parsing might be easier with sensible default handling directly through clap
         //      https://stackoverflow.com/questions/55133351/is-there-a-way-to-get-clap-to-use-default-values-from-a-file
         let comments = match &args.fname {
@@ -287,6 +294,7 @@ impl Review {
             id,
             auth: auth.to_owned(),
             comments: comments.to_owned(),
+            local_repo,
         })
     }
 
@@ -369,6 +377,11 @@ impl Review {
             None => self.comments.to_owned(),
         };
 
+        self.local_repo = match &args.local_repo {
+            Some(v) => v.to_owned(),
+            None => self.comments.to_owned(),
+        };
+
         Ok(())
     }
 }
@@ -415,6 +428,8 @@ struct Args {
     id: Option<u32>,
     #[arg(short = 'f', long)]
     fname: Option<String>,
+    #[arg(short = 'l', long)]
+    local_repo: Option<String>,
 }
 
 // XXX: use `register_capability` to register new capabilities
@@ -454,7 +469,7 @@ impl Backend {
             }
         };
 
-        let repo = match Repo::new(&self.review.interface) {
+        let repo = match Repo::new(&self.review.interface, &self.review.local_repo) {
             Ok(r) => r,
             Err(e) => {
                 self.client
@@ -547,7 +562,7 @@ async fn serve_comments(review: Review) -> Result<(), Error> {
                                                  //      available data/comments)
     review.save_comments(&comments)?;
 
-    let repo = Repo::new(&review.interface)?;
+    let repo = Repo::new(&review.interface, &review.local_repo)?;
 
     let (service, socket) = LspService::new(|client| Backend { client, review });
 
