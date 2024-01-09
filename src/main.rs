@@ -2,8 +2,11 @@
 //!
 //! Provides LSP interfaces for reviewing code inline in editor.
 use reqwest;
+use reqwest::Response;
 use serde::{Deserialize, Serialize};
 use tower_lsp::lsp_types::ServerCapabilities;
+
+use bytes::Bytes;
 
 use core::fmt;
 use std::{collections::HashMap, fs};
@@ -24,6 +27,7 @@ enum Error {
     IOError(std::io::Error),
     YAML(serde_yaml::Error),
     Git(git2::Error),
+    UTF8Error(std::str::Utf8Error),
 }
 
 impl std::error::Error for Error {}
@@ -38,6 +42,7 @@ impl fmt::Display for Error {
             Error::IOError(_) => "I/O error",
             Error::MissingConfig => "configuration incomplete",
             Error::InconsistentConfig => "configuration inconsistent",
+            Error::UTF8Error(_) => "UTF8 decoding error",
         })
     }
 }
@@ -101,6 +106,9 @@ impl Error {
     }
     fn from_git_error(err: git2::Error) -> Error {
         Error::Git(err)
+    }
+    fn from_utf8_error(err: std::str::Utf8Error) -> Error {
+        Error::UTF8Error(err)
     }
 }
 
