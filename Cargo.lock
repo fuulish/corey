@@ -372,6 +372,7 @@ dependencies = [
 name = "ghapi"
 version = "0.1.0"
 dependencies = [
+ "bytes",
  "clap",
  "git2",
  "reqwest",
