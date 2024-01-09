@@ -309,7 +309,7 @@ impl Review {
     fn get_authentication(auth: &str) -> Result<String, Error> {
         fs::read_to_string(auth).map_err(Error::from_io_error)
     }
-    async fn get_comments(&self) -> Result<Vec<ReviewComment>, Error> {
+    async fn get_comments_response(&self) -> Result<Response, Error> {
         let request_url = match self.interface {
             ReviewInterface::GitHub => {
                 format!(
@@ -324,15 +324,29 @@ impl Review {
 
         let token = Review::get_authentication(&self.auth)?;
 
-        let response = reqwest::Client::new()
+        reqwest::Client::new()
             .get(request_url)
             .header("User-Agent", "clireview/0.0.1")
             .bearer_auth(token)
             .send()
             .await
-            .map_err(Error::from_reqwest_error)?;
+            .map_err(Error::from_reqwest_error)
+    }
 
-        response.json().await.map_err(Error::from_reqwest_error)
+    async fn get_comments(&self) -> Result<Vec<ReviewComment>, Error> {
+        self.get_comments_response()
+            .await?
+            .json()
+            .await
+            .map_err(Error::from_reqwest_error)
+    }
+
+    async fn raw_comments(&self) -> Result<Bytes, Error> {
+        self.get_comments_response()
+            .await?
+            .bytes()
+            .await
+            .map_err(Error::from_reqwest_error)
     }
 
     pub fn save_config(&self) -> Result<(), Error> {
@@ -405,6 +419,7 @@ enum Command {
     Update,
     Run,
     Print,
+    Raw,
 }
 
 // XXX: provide optional remote, otherwise see if .git directory is present and use default remote
@@ -592,6 +607,16 @@ async fn print_comments(review: Review) -> Result<(), Error> {
     Ok(())
 }
 
+async fn print_raw(review: Review) -> Result<(), Error> {
+    let comments = review.raw_comments().await?;
+    print!(
+        "{}",
+        std::str::from_utf8(&comments).map_err(Error::from_utf8_error)?
+    );
+
+    Ok(())
+}
+
 // XXX: decide on semantics
 //      init/update can refer solely to the configuration (there will be no updating of comments at
 //      that stage)
@@ -624,7 +649,7 @@ async fn main() -> Result<(), Error> {
 
     let mut pr = match command {
         Command::Init => Review::from_args(&args)?,
-        Command::Update | Command::Run | Command::Print => {
+        Command::Update | Command::Run | Command::Print | Command::Raw => {
             Review::from_config(Review::CONFIG_NAME)?
         }
     };
@@ -639,6 +664,7 @@ async fn main() -> Result<(), Error> {
         Command::Init | Command::Update => pr.save_config()?,
         Command::Run => serve_comments(pr).await?,
         Command::Print => print_comments(pr).await?,
+        Command::Raw => print_raw(pr).await?,
     }
     Ok(())
 }
