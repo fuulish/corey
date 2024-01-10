@@ -642,6 +642,8 @@ async fn reply_to_comment(
         None => return Err(Error::MissingConfig), // XXX: would be nice to attach an actual message here
     };
 
+    let request_body = Post { body };
+
     let client = reqwest::Client::new();
     let _res = client
         .post(
@@ -651,7 +653,7 @@ async fn reply_to_comment(
                 PULL_NUMBER = review.id,
                 COMMENT_ID = id),
         )
-        .body(body)
+        .json(&request_body)
         .send()
         .await
         .map_err(Error::from_reqwest_error)?;
