@@ -34,16 +34,18 @@ impl std::error::Error for Error {}
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        f.write_str(match self {
-            Error::Git(_) => "Git error",
-            Error::YAML(_) => "YAML processing error",
-            Error::Gathering(_) => "gathering error",
-            Error::NotImplemented => "not implemented",
-            Error::IOError(_) => "I/O error",
-            Error::MissingConfig => "configuration incomplete",
-            Error::InconsistentConfig => "configuration inconsistent",
-            Error::UTF8Error(_) => "UTF8 decoding error",
-        })
+        // XXX there must be a better way than creating owned strings for all of those
+        let msg = match self {
+            Error::Git(_) => "Git error".to_owned(),
+            Error::YAML(_) => "YAML processing error".to_owned(),
+            Error::Gathering(_) => "gathering error".to_owned(),
+            Error::NotImplemented => "not implemented".to_owned(),
+            Error::IOError(_) => "I/O error".to_owned(),
+            Error::MissingConfig => "configuration incomplete".to_owned(),
+            Error::InconsistentConfig => "configuration inconsistent".to_owned(),
+            Error::UTF8Error(_) => "UTF8 decoding error".to_owned(),
+        };
+        f.write_str(&msg)
     }
 }
 
