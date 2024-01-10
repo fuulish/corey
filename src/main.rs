@@ -642,6 +642,8 @@ async fn reply_to_comment(
         None => return Err(Error::MissingConfig), // XXX: would be nice to attach an actual message here
     };
 
+    let token = Review::get_authentication(&review.auth)?;
+
     let request_body = Post { body };
 
     let client = reqwest::Client::new();
@@ -654,6 +656,7 @@ async fn reply_to_comment(
                 COMMENT_ID = id),
         )
         .json(&request_body)
+        .bearer_auth(token)
         .send()
         .await
         .map_err(Error::from_reqwest_error)?;
