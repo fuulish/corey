@@ -233,7 +233,12 @@ impl<'a> Conversation<'a> {
                     // XXX: sort replies by ids (if required)
                     for reply in rid {
                         // XXX error handling
-                        println!("{name}: {body}", name = reply.user.login, body = reply.body);
+                        println!(
+                            "[{id}]{name}: {body}",
+                            id = reply.id,
+                            name = reply.user.login,
+                            body = reply.body
+                        );
                     }
                     println!("|{}|", "-".repeat(NCOL));
                 }
