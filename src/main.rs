@@ -212,9 +212,9 @@ impl<'a> Conversation<'a> {
             println!("|{}|", "+".repeat(NCOL));
             println!("{}", comment.path);
             println!("{}", comment.diff_hunk);
-            println!("comment id: {}", comment.id);
             println!(
-                "{name}: {body}",
+                "[{id}]{name}: {body}",
+                id = comment.id,
                 name = comment.user.login,
                 body = comment.body
             );
