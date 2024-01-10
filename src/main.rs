@@ -653,7 +653,7 @@ async fn reply_to_comment(
     let request_body = Post { body };
 
     let client = reqwest::Client::new();
-    let _res = client
+    let res = client
         .post(
             format!("https://api.github.com/repos/{OWNER}/{REPO}/pulls/{PULL_NUMBER}/comments/{COMMENT_ID}/replies",
                 OWNER = &review.owner,
@@ -669,7 +669,13 @@ async fn reply_to_comment(
         .await
         .map_err(Error::from_reqwest_error)?;
 
-    Ok(())
+    return match res.error_for_status_ref() {
+        Ok(_) => Ok(()),
+        Err(err) => match err.status() {
+            Some(v) => Err(Error::RequestError(v)),
+            None => Err(Error::SNH("something went wrong in weeds".to_owned())),
+        },
+    };
 }
 
 // XXX: decide on semantics
