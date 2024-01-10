@@ -20,6 +20,7 @@ use git2;
 #[allow(dead_code)]
 #[derive(Debug)]
 enum Error {
+    SNH(String),
     NotImplemented,
     MissingConfig, // XXX: add custom text to indicate what is missing
     InconsistentConfig,
@@ -28,6 +29,7 @@ enum Error {
     YAML(serde_yaml::Error),
     Git(git2::Error),
     UTF8Error(std::str::Utf8Error),
+    RequestError(reqwest::StatusCode),
 }
 
 impl std::error::Error for Error {}
@@ -36,6 +38,7 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         // XXX there must be a better way than creating owned strings for all of those
         let msg = match self {
+            Error::SNH(t) => format!("Should not happen {}", t),
             Error::Git(_) => "Git error".to_owned(),
             Error::YAML(_) => "YAML processing error".to_owned(),
             Error::Gathering(_) => "gathering error".to_owned(),
@@ -44,6 +47,7 @@ impl fmt::Display for Error {
             Error::MissingConfig => "configuration incomplete".to_owned(),
             Error::InconsistentConfig => "configuration inconsistent".to_owned(),
             Error::UTF8Error(_) => "UTF8 decoding error".to_owned(),
+            Error::RequestError(err) => format!("Request error: {}", err),
         };
         f.write_str(&msg)
     }
