@@ -656,6 +656,8 @@ async fn reply_to_comment(
                 COMMENT_ID = id),
         )
         .json(&request_body)
+        .header("User-Agent", "clireview/0.0.1")
+        .header("Accept", "application/vnd.github+json")
         .bearer_auth(token)
         .send()
         .await
