@@ -20,6 +20,7 @@ use git2;
 #[allow(dead_code)]
 #[derive(Debug)]
 enum Error {
+    SNH(String),
     NotImplemented,
     MissingConfig, // XXX: add custom text to indicate what is missing
     InconsistentConfig,
@@ -28,22 +29,27 @@ enum Error {
     YAML(serde_yaml::Error),
     Git(git2::Error),
     UTF8Error(std::str::Utf8Error),
+    RequestError(reqwest::StatusCode),
 }
 
 impl std::error::Error for Error {}
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        f.write_str(match self {
-            Error::Git(_) => "Git error",
-            Error::YAML(_) => "YAML processing error",
-            Error::Gathering(_) => "gathering error",
-            Error::NotImplemented => "not implemented",
-            Error::IOError(_) => "I/O error",
-            Error::MissingConfig => "configuration incomplete",
-            Error::InconsistentConfig => "configuration inconsistent",
-            Error::UTF8Error(_) => "UTF8 decoding error",
-        })
+        // XXX there must be a better way than creating owned strings for all of those
+        let msg = match self {
+            Error::SNH(t) => format!("Should not happen {}", t),
+            Error::Git(_) => "Git error".to_owned(),
+            Error::YAML(_) => "YAML processing error".to_owned(),
+            Error::Gathering(_) => "gathering error".to_owned(),
+            Error::NotImplemented => "not implemented".to_owned(),
+            Error::IOError(_) => "I/O error".to_owned(),
+            Error::MissingConfig => "configuration incomplete".to_owned(),
+            Error::InconsistentConfig => "configuration inconsistent".to_owned(),
+            Error::UTF8Error(_) => "UTF8 decoding error".to_owned(),
+            Error::RequestError(err) => format!("Request error: {}", err),
+        };
+        f.write_str(&msg)
     }
 }
 
@@ -212,9 +218,9 @@ impl<'a> Conversation<'a> {
             println!("|{}|", "+".repeat(NCOL));
             println!("{}", comment.path);
             println!("{}", comment.diff_hunk);
-            println!("comment id: {}", comment.id);
             println!(
-                "{name}: {body}",
+                "[{id}]{name}: {body}",
+                id = comment.id,
                 name = comment.user.login,
                 body = comment.body
             );
@@ -457,8 +463,8 @@ struct Args {
     local_repo: Option<String>,
     #[arg(short = 'c', long)]
     comment: Option<u32>,
-    #[arg(short = 't', long)]
-    text: Option<String>,
+    #[arg(short = 'b', long)]
+    body: Option<String>,
 }
 
 // XXX: use `register_capability` to register new capabilities
@@ -623,13 +629,18 @@ async fn print_raw(review: Review) -> Result<(), Error> {
     Ok(())
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+struct Post {
+    body: String,
+}
+
 async fn reply_to_comment(
     review: Review,
     id: Option<u32>,
-    reply: Option<String>,
+    body: Option<String>,
 ) -> Result<(), Error> {
-    let reply = match reply {
-        Some(r) => r,
+    let body = match body {
+        Some(b) => b,
         None => return Err(Error::MissingConfig), // XXX: would be nice to attach an actual message here
     };
     let id = match id {
@@ -637,8 +648,12 @@ async fn reply_to_comment(
         None => return Err(Error::MissingConfig), // XXX: would be nice to attach an actual message here
     };
 
+    let token = Review::get_authentication(&review.auth)?;
+
+    let request_body = Post { body };
+
     let client = reqwest::Client::new();
-    let _res = client
+    let res = client
         .post(
             format!("https://api.github.com/repos/{OWNER}/{REPO}/pulls/{PULL_NUMBER}/comments/{COMMENT_ID}/replies",
                 OWNER = &review.owner,
@@ -646,12 +661,21 @@ async fn reply_to_comment(
                 PULL_NUMBER = review.id,
                 COMMENT_ID = id),
         )
-        .body(reply)
+        .json(&request_body)
+        .header("User-Agent", "clireview/0.0.1")
+        .header("Accept", "application/vnd.github+json")
+        .bearer_auth(token)
         .send()
         .await
         .map_err(Error::from_reqwest_error)?;
 
-    Ok(())
+    return match res.error_for_status_ref() {
+        Ok(_) => Ok(()),
+        Err(err) => match err.status() {
+            Some(v) => Err(Error::RequestError(v)),
+            None => Err(Error::SNH("something went wrong in weeds".to_owned())),
+        },
+    };
 }
 
 // XXX: decide on semantics
@@ -702,7 +726,7 @@ async fn main() -> Result<(), Error> {
         Command::Run => serve_comments(pr).await?,
         Command::Print => print_comments(pr).await?,
         Command::Raw => print_raw(pr).await?,
-        Command::Reply => reply_to_comment(pr, args.comment, args.text).await?,
+        Command::Reply => reply_to_comment(pr, args.comment, args.body).await?,
     }
     Ok(())
 }
