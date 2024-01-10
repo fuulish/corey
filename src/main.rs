@@ -457,8 +457,8 @@ struct Args {
     local_repo: Option<String>,
     #[arg(short = 'c', long)]
     comment: Option<u32>,
-    #[arg(short = 't', long)]
-    text: Option<String>,
+    #[arg(short = 'b', long)]
+    body: Option<String>,
 }
 
 // XXX: use `register_capability` to register new capabilities
@@ -623,13 +623,18 @@ async fn print_raw(review: Review) -> Result<(), Error> {
     Ok(())
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+struct Post {
+    body: String,
+}
+
 async fn reply_to_comment(
     review: Review,
     id: Option<u32>,
-    reply: Option<String>,
+    body: Option<String>,
 ) -> Result<(), Error> {
-    let reply = match reply {
-        Some(r) => r,
+    let body = match body {
+        Some(b) => b,
         None => return Err(Error::MissingConfig), // XXX: would be nice to attach an actual message here
     };
     let id = match id {
@@ -646,7 +651,7 @@ async fn reply_to_comment(
                 PULL_NUMBER = review.id,
                 COMMENT_ID = id),
         )
-        .body(reply)
+        .body(body)
         .send()
         .await
         .map_err(Error::from_reqwest_error)?;
@@ -702,7 +707,7 @@ async fn main() -> Result<(), Error> {
         Command::Run => serve_comments(pr).await?,
         Command::Print => print_comments(pr).await?,
         Command::Raw => print_raw(pr).await?,
-        Command::Reply => reply_to_comment(pr, args.comment, args.text).await?,
+        Command::Reply => reply_to_comment(pr, args.comment, args.body).await?,
     }
     Ok(())
 }
