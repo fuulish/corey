@@ -442,6 +442,7 @@ enum Command {
     Print,
     Raw,
     Reply,
+    Comment,
 }
 
 // XXX: provide optional remote, otherwise see if .git directory is present and use default remote
@@ -479,6 +480,10 @@ struct Args {
     comment: Option<u32>,
     #[arg(short = 'b', long)]
     body: Option<String>,
+    #[arg(short = 'j', long)]
+    commit_id: Option<String>,
+    #[arg(short = 'x', long)]
+    path: Option<String>,
 }
 
 // XXX: use `register_capability` to register new capabilities
@@ -693,6 +698,65 @@ async fn reply_to_comment(
     };
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+struct Comment {
+    body: String,
+    commit_id: String,
+    path: String,
+}
+
+async fn create_comment(
+    review: Review,
+    commit_id: Option<String>,
+    body: Option<String>,
+    path: Option<String>,
+) -> Result<(), Error> {
+    let body = match body {
+        Some(b) => b,
+        None => return Err(Error::MissingConfig("comment body".to_owned())),
+    };
+    let commit_id = match commit_id {
+        Some(o) => o,
+        None => return Err(Error::MissingConfig("commit ID".to_owned())),
+    };
+    let path = match path {
+        Some(p) => p,
+        None => return Err(Error::MissingConfig("relative file path".to_owned())),
+    };
+
+    let request_body = Comment {
+        body,
+        commit_id,
+        path,
+    };
+    let token = Review::get_authentication(&review.auth)?;
+    let client = reqwest::Client::new();
+
+    let res = client
+        .post(format!(
+            "https://api.{URL}/repos/{OWNER}/{REPO}/pulls/{PULL_NUMBER}/comments",
+            URL = &review.url,
+            OWNER = &review.owner,
+            REPO = &review.repo,
+            PULL_NUMBER = review.id,
+        ))
+        .json(&request_body)
+        .header("User-Agent", "clireview/0.0.1")
+        .header("Accept", "application/vnd.github+json")
+        .bearer_auth(token)
+        .send()
+        .await
+        .map_err(Error::from_reqwest_error)?;
+
+    return match res.error_for_status_ref() {
+        Ok(_) => Ok(()),
+        Err(err) => match err.status() {
+            Some(v) => Err(Error::RequestError(v)),
+            None => Err(Error::SNH("something went wrong in weeds".to_owned())),
+        },
+    };
+}
+
 // XXX: decide on semantics
 //      init/update can refer solely to the configuration (there will be no updating of comments at
 //      that stage)
@@ -725,9 +789,12 @@ async fn main() -> Result<(), Error> {
 
     let mut pr = match command {
         Command::Init => Review::from_args(&args)?,
-        Command::Update | Command::Run | Command::Print | Command::Raw | Command::Reply => {
-            Review::from_config(Review::CONFIG_NAME)?
-        }
+        Command::Update
+        | Command::Run
+        | Command::Print
+        | Command::Raw
+        | Command::Reply
+        | Command::Comment => Review::from_config(Review::CONFIG_NAME)?,
     };
 
     pr.update_config(&args)?;
@@ -738,6 +805,7 @@ async fn main() -> Result<(), Error> {
         Command::Run => serve_comments(pr).await?,
         Command::Print => print_comments(pr).await?,
         Command::Raw => print_raw(pr).await?,
+        Command::Comment => create_comment(pr, args.commit_id, args.body, args.path).await?,
         Command::Reply => reply_to_comment(pr, args.comment, args.body).await?,
     }
     Ok(())
