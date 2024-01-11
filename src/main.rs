@@ -22,7 +22,7 @@ use git2;
 enum Error {
     SNH(String),
     NotImplemented,
-    MissingConfig, // XXX: add custom text to indicate what is missing
+    MissingConfig(String),
     InconsistentConfig,
     Gathering(reqwest::Error),
     IOError(std::io::Error),
@@ -44,7 +44,7 @@ impl fmt::Display for Error {
             Error::Gathering(_) => "gathering error".to_owned(),
             Error::NotImplemented => "not implemented".to_owned(),
             Error::IOError(_) => "I/O error".to_owned(),
-            Error::MissingConfig => "configuration incomplete".to_owned(),
+            Error::MissingConfig(miss) => format!("configuration incomplete: {} missing", miss),
             Error::InconsistentConfig => "configuration inconsistent".to_owned(),
             Error::UTF8Error(_) => "UTF8 decoding error".to_owned(),
             Error::RequestError(err) => format!("Request error: {}", err),
@@ -276,22 +276,22 @@ impl Review {
 
     pub fn from_args(args: &Args) -> Result<Self, Error> {
         let Some(interface) = args.platform else {
-            return Err(Error::MissingConfig);
+            return Err(Error::MissingConfig("interface".to_owned()));
         };
         let Some(ref owner) = &args.owner else {
-            return Err(Error::MissingConfig);
+            return Err(Error::MissingConfig("owner".to_owned()));
         };
         let Some(ref repo) = &args.repo else {
-            return Err(Error::MissingConfig);
+            return Err(Error::MissingConfig("reposiotry".to_owned()));
         };
         let Some(ref url) = &args.url else {
-            return Err(Error::MissingConfig);
+            return Err(Error::MissingConfig("URL".to_owned()));
         };
         let Some(id) = args.id else {
-            return Err(Error::MissingConfig);
+            return Err(Error::MissingConfig("PR ID".to_owned()));
         };
         let Some(ref auth) = &args.token else {
-            return Err(Error::MissingConfig);
+            return Err(Error::MissingConfig("authentication".to_owned()));
         };
 
         let local_repo = match &args.local_repo {
@@ -646,11 +646,11 @@ async fn reply_to_comment(
 ) -> Result<(), Error> {
     let body = match body {
         Some(b) => b,
-        None => return Err(Error::MissingConfig), // XXX: would be nice to attach an actual message here
+        None => return Err(Error::MissingConfig("reply body".to_owned())),
     };
     let id = match id {
         Some(i) => i,
-        None => return Err(Error::MissingConfig), // XXX: would be nice to attach an actual message here
+        None => return Err(Error::MissingConfig("ID".to_owned())),
     };
 
     let token = Review::get_authentication(&review.auth)?;
