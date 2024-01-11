@@ -660,7 +660,8 @@ async fn reply_to_comment(
     let client = reqwest::Client::new();
     let res = client
         .post(
-            format!("https://api.github.com/repos/{OWNER}/{REPO}/pulls/{PULL_NUMBER}/comments/{COMMENT_ID}/replies",
+            format!("https://api.{URL}/repos/{OWNER}/{REPO}/pulls/{PULL_NUMBER}/comments/{COMMENT_ID}/replies",
+                URL = &review.url,
                 OWNER = &review.owner,
                 REPO = &review.repo,
                 PULL_NUMBER = review.id,
