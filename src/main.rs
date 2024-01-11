@@ -17,6 +17,8 @@ use tower_lsp::{Client, LanguageServer, LspService, Server};
 
 use git2;
 
+mod diff;
+
 #[allow(dead_code)]
 #[derive(Debug)]
 enum Error {
