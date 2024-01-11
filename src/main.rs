@@ -336,13 +336,21 @@ impl Review {
 
         let token = Review::get_authentication(&self.auth)?;
 
-        reqwest::Client::new()
+        let res = reqwest::Client::new()
             .get(request_url)
             .header("User-Agent", "clireview/0.0.1")
             .bearer_auth(token)
             .send()
             .await
-            .map_err(Error::from_reqwest_error)
+            .map_err(Error::from_reqwest_error)?;
+
+        return match res.error_for_status_ref() {
+            Ok(_) => Ok(res),
+            Err(err) => match err.status() {
+                Some(v) => Err(Error::RequestError(v)),
+                None => Err(Error::SNH("something went wrong in weeds".to_owned())),
+            },
+        };
     }
 
     async fn get_comments(&self) -> Result<Vec<ReviewComment>, Error> {
