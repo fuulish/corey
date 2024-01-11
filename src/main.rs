@@ -729,10 +729,7 @@ async fn main() -> Result<(), Error> {
         }
     };
 
-    match command {
-        Command::Update => pr.update_config(&args)?,
-        _ => (),
-    }
+    pr.update_config(&args)?;
     let pr = pr;
 
     match command {
