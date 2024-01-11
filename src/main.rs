@@ -73,6 +73,7 @@ struct ReviewComment {
     user: User,
     diff_hunk: String,
     path: String, // XXX: should be OsString or something like that
+    subject_type: Option<String>,
 }
 
 // XXX: - ensure line-in-review to line-in-editor correspondence
