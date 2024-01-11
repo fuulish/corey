@@ -643,7 +643,7 @@ async fn print_raw(review: Review) -> Result<(), Error> {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-struct Post {
+struct Reply {
     body: String,
 }
 
@@ -663,7 +663,7 @@ async fn reply_to_comment(
 
     let token = Review::get_authentication(&review.auth)?;
 
-    let request_body = Post { body };
+    let request_body = Reply { body };
 
     let client = reqwest::Client::new();
     let res = client
