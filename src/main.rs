@@ -424,7 +424,7 @@ impl Review {
 
         self.local_repo = match &args.local_repo {
             Some(v) => v.to_owned(),
-            None => self.comments.to_owned(),
+            None => self.local_repo.to_owned(),
         };
 
         Ok(())
