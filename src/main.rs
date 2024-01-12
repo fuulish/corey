@@ -32,6 +32,7 @@ enum Error {
     Git(git2::Error),
     UTF8Error(std::str::Utf8Error),
     RequestError(reqwest::StatusCode),
+    DiffError,
 }
 
 impl std::error::Error for Error {}
@@ -50,6 +51,7 @@ impl fmt::Display for Error {
             Error::InconsistentConfig => "configuration inconsistent".to_owned(),
             Error::UTF8Error(_) => "UTF8 decoding error".to_owned(),
             Error::RequestError(err) => format!("Request error: {}", err),
+            Error::DiffError => format!("Error processing diff"),
         };
         f.write_str(&msg)
     }
@@ -118,6 +120,9 @@ impl Error {
     }
     fn from_utf8_error(err: std::str::Utf8Error) -> Error {
         Error::UTF8Error(err)
+    }
+    fn from_diff_error(err: diff::Error) -> Error {
+        Error::DiffError
     }
 }
 
@@ -535,8 +540,35 @@ impl Backend {
             }
         };
 
+        // XXX: only for debugging purposes
+        //      BUT: note that the full document text is coming through
+        //      we can use that within a rope and search for the text that is within the actual
+        //      commit
+        self.client
+            .log_message(
+                lsp_types::MessageType::ERROR,
+                format!("FUX| text is: {}", params.text),
+            )
+            .await;
+
         let uri = params.uri.as_str();
 
+        // XXX: also need to figure out what exactly is being sent by GitHub
+        //      should always be the line and the commit ID, so we can blame it directly and also
+        //      compare to what we're having at this moment
+
+        // line range
+        //  params.text contains the string of interest
+        //  -> can turn it into a rope and use that for more info
+        //
+        // check commit id
+        // check cleanliness of commit,
+        // if everything is clean, `line_range` is just fine
+        // if it's unclean or on another commit, we need git magic
+        // unclean:
+        //  compare lines from text document and the params.text
+        //  check how file evolved and whether the line of interest is still present or what it has
+        //  morphed into
         let diagnostics = conversation
             .starter
             .iter()
@@ -592,6 +624,12 @@ impl LanguageServer for Backend {
     }
 
     async fn did_change(&self, mut params: lsp_types::DidChangeTextDocumentParams) {
+        self.client
+            .log_message(
+                lsp_types::MessageType::ERROR,
+                format!("FUX| received textDocument/didChange notification"),
+            )
+            .await;
         self.on_change(lsp_types::TextDocumentItem {
             uri: params.text_document.uri,
             language_id: "X".to_owned(),
