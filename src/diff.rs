@@ -45,6 +45,7 @@ pub struct Diff {
     //    XXX: multi-file diffs do not share context,
     //    do they?
     original_context: std::vec::Vec<std::ops::Range<u32>>,
+    trailing_newline: bool,
 }
 
 #[derive(PartialEq)]
@@ -62,6 +63,8 @@ impl Diff {
         if !hunk.starts_with("@@") {
             return Err(Error::Parse);
         }
+
+        let trailing_newline = if hunk.ends_with("\n") { true } else { false };
         let mut original_lines = std::vec::Vec::<String>::new();
         let mut lines = std::vec::Vec::<String>::new();
 
@@ -169,6 +172,7 @@ impl Diff {
             lines,
             context,
             original_context,
+            trailing_newline,
         })
     }
 
@@ -179,7 +183,11 @@ impl Diff {
 
         for line in &self.lines {
             out.push_str(&line);
-            out.push_str("\n");
+            out.push_str("\n"); // XXX: superfluous?/could check hunk if it contains a trailing \n
+        }
+
+        if !self.trailing_newline {
+            out = out.strip_suffix("\n").unwrap().to_owned();
         }
 
         return out;
@@ -190,7 +198,11 @@ impl Diff {
 
         for line in &self.original_lines {
             out.push_str(&line);
-            out.push_str("\n");
+            out.push_str("\n"); // XXX: superfluous?
+        }
+
+        if !self.trailing_newline {
+            out = out.strip_suffix("\n").unwrap().to_owned();
         }
 
         return out;
