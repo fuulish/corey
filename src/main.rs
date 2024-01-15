@@ -17,12 +17,14 @@ use tower_lsp::{Client, LanguageServer, LspService, Server};
 
 use git2;
 
+mod diff;
+
 #[allow(dead_code)]
 #[derive(Debug)]
 enum Error {
     SNH(String),
     NotImplemented,
-    MissingConfig, // XXX: add custom text to indicate what is missing
+    MissingConfig(String),
     InconsistentConfig,
     Gathering(reqwest::Error),
     IOError(std::io::Error),
@@ -30,6 +32,7 @@ enum Error {
     Git(git2::Error),
     UTF8Error(std::str::Utf8Error),
     RequestError(reqwest::StatusCode),
+    DiffError,
 }
 
 impl std::error::Error for Error {}
@@ -44,10 +47,11 @@ impl fmt::Display for Error {
             Error::Gathering(_) => "gathering error".to_owned(),
             Error::NotImplemented => "not implemented".to_owned(),
             Error::IOError(_) => "I/O error".to_owned(),
-            Error::MissingConfig => "configuration incomplete".to_owned(),
+            Error::MissingConfig(miss) => format!("configuration incomplete: {} missing", miss),
             Error::InconsistentConfig => "configuration inconsistent".to_owned(),
             Error::UTF8Error(_) => "UTF8 decoding error".to_owned(),
             Error::RequestError(err) => format!("Request error: {}", err),
+            Error::DiffError => format!("Error processing diff"),
         };
         f.write_str(&msg)
     }
@@ -73,6 +77,7 @@ struct ReviewComment {
     user: User,
     diff_hunk: String,
     path: String, // XXX: should be OsString or something like that
+    subject_type: Option<String>,
 }
 
 // XXX: - ensure line-in-review to line-in-editor correspondence
@@ -115,6 +120,9 @@ impl Error {
     }
     fn from_utf8_error(err: std::str::Utf8Error) -> Error {
         Error::UTF8Error(err)
+    }
+    fn from_diff_error(err: diff::Error) -> Error {
+        Error::DiffError
     }
 }
 
@@ -276,22 +284,22 @@ impl Review {
 
     pub fn from_args(args: &Args) -> Result<Self, Error> {
         let Some(interface) = args.platform else {
-            return Err(Error::MissingConfig);
+            return Err(Error::MissingConfig("interface".to_owned()));
         };
         let Some(ref owner) = &args.owner else {
-            return Err(Error::MissingConfig);
+            return Err(Error::MissingConfig("owner".to_owned()));
         };
         let Some(ref repo) = &args.repo else {
-            return Err(Error::MissingConfig);
+            return Err(Error::MissingConfig("reposiotry".to_owned()));
         };
         let Some(ref url) = &args.url else {
-            return Err(Error::MissingConfig);
+            return Err(Error::MissingConfig("URL".to_owned()));
         };
         let Some(id) = args.id else {
-            return Err(Error::MissingConfig);
+            return Err(Error::MissingConfig("PR ID".to_owned()));
         };
         let Some(ref auth) = &args.token else {
-            return Err(Error::MissingConfig);
+            return Err(Error::MissingConfig("authentication".to_owned()));
         };
 
         let local_repo = match &args.local_repo {
@@ -336,13 +344,21 @@ impl Review {
 
         let token = Review::get_authentication(&self.auth)?;
 
-        reqwest::Client::new()
+        let res = reqwest::Client::new()
             .get(request_url)
             .header("User-Agent", "clireview/0.0.1")
             .bearer_auth(token)
             .send()
             .await
-            .map_err(Error::from_reqwest_error)
+            .map_err(Error::from_reqwest_error)?;
+
+        return match res.error_for_status_ref() {
+            Ok(_) => Ok(res),
+            Err(err) => match err.status() {
+                Some(v) => Err(Error::RequestError(v)),
+                None => Err(Error::SNH("something went wrong in weeds".to_owned())),
+            },
+        };
     }
 
     async fn get_comments(&self) -> Result<Vec<ReviewComment>, Error> {
@@ -413,7 +429,7 @@ impl Review {
 
         self.local_repo = match &args.local_repo {
             Some(v) => v.to_owned(),
-            None => self.comments.to_owned(),
+            None => self.local_repo.to_owned(),
         };
 
         Ok(())
@@ -433,6 +449,7 @@ enum Command {
     Print,
     Raw,
     Reply,
+    Comment,
 }
 
 // XXX: provide optional remote, otherwise see if .git directory is present and use default remote
@@ -470,6 +487,10 @@ struct Args {
     comment: Option<u32>,
     #[arg(short = 'b', long)]
     body: Option<String>,
+    #[arg(short = 'j', long)]
+    commit_id: Option<String>,
+    #[arg(short = 'x', long)]
+    path: Option<String>,
 }
 
 // XXX: use `register_capability` to register new capabilities
@@ -519,8 +540,35 @@ impl Backend {
             }
         };
 
+        // XXX: only for debugging purposes
+        //      BUT: note that the full document text is coming through
+        //      we can use that within a rope and search for the text that is within the actual
+        //      commit
+        self.client
+            .log_message(
+                lsp_types::MessageType::ERROR,
+                format!("FUX| text is: {}", params.text),
+            )
+            .await;
+
         let uri = params.uri.as_str();
 
+        // XXX: also need to figure out what exactly is being sent by GitHub
+        //      should always be the line and the commit ID, so we can blame it directly and also
+        //      compare to what we're having at this moment
+
+        // line range
+        //  params.text contains the string of interest
+        //  -> can turn it into a rope and use that for more info
+        //
+        // check commit id
+        // check cleanliness of commit,
+        // if everything is clean, `line_range` is just fine
+        // if it's unclean or on another commit, we need git magic
+        // unclean:
+        //  compare lines from text document and the params.text
+        //  check how file evolved and whether the line of interest is still present or what it has
+        //  morphed into
         let diagnostics = conversation
             .starter
             .iter()
@@ -576,6 +624,12 @@ impl LanguageServer for Backend {
     }
 
     async fn did_change(&self, mut params: lsp_types::DidChangeTextDocumentParams) {
+        self.client
+            .log_message(
+                lsp_types::MessageType::ERROR,
+                format!("FUX| received textDocument/didChange notification"),
+            )
+            .await;
         self.on_change(lsp_types::TextDocumentItem {
             uri: params.text_document.uri,
             language_id: "X".to_owned(),
@@ -635,7 +689,7 @@ async fn print_raw(review: Review) -> Result<(), Error> {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-struct Post {
+struct Reply {
     body: String,
 }
 
@@ -646,26 +700,86 @@ async fn reply_to_comment(
 ) -> Result<(), Error> {
     let body = match body {
         Some(b) => b,
-        None => return Err(Error::MissingConfig), // XXX: would be nice to attach an actual message here
+        None => return Err(Error::MissingConfig("reply body".to_owned())),
     };
     let id = match id {
         Some(i) => i,
-        None => return Err(Error::MissingConfig), // XXX: would be nice to attach an actual message here
+        None => return Err(Error::MissingConfig("ID".to_owned())),
     };
 
     let token = Review::get_authentication(&review.auth)?;
 
-    let request_body = Post { body };
+    let request_body = Reply { body };
 
     let client = reqwest::Client::new();
     let res = client
         .post(
-            format!("https://api.github.com/repos/{OWNER}/{REPO}/pulls/{PULL_NUMBER}/comments/{COMMENT_ID}/replies",
+            format!("https://api.{URL}/repos/{OWNER}/{REPO}/pulls/{PULL_NUMBER}/comments/{COMMENT_ID}/replies",
+                URL = &review.url,
                 OWNER = &review.owner,
                 REPO = &review.repo,
                 PULL_NUMBER = review.id,
                 COMMENT_ID = id),
         )
+        .json(&request_body)
+        .header("User-Agent", "clireview/0.0.1")
+        .header("Accept", "application/vnd.github+json")
+        .bearer_auth(token)
+        .send()
+        .await
+        .map_err(Error::from_reqwest_error)?;
+
+    return match res.error_for_status_ref() {
+        Ok(_) => Ok(()),
+        Err(err) => match err.status() {
+            Some(v) => Err(Error::RequestError(v)),
+            None => Err(Error::SNH("something went wrong in weeds".to_owned())),
+        },
+    };
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct Comment {
+    body: String,
+    commit_id: String,
+    path: String,
+}
+
+async fn create_comment(
+    review: Review,
+    commit_id: Option<String>,
+    body: Option<String>,
+    path: Option<String>,
+) -> Result<(), Error> {
+    let body = match body {
+        Some(b) => b,
+        None => return Err(Error::MissingConfig("comment body".to_owned())),
+    };
+    let commit_id = match commit_id {
+        Some(o) => o,
+        None => return Err(Error::MissingConfig("commit ID".to_owned())),
+    };
+    let path = match path {
+        Some(p) => p,
+        None => return Err(Error::MissingConfig("relative file path".to_owned())),
+    };
+
+    let request_body = Comment {
+        body,
+        commit_id,
+        path,
+    };
+    let token = Review::get_authentication(&review.auth)?;
+    let client = reqwest::Client::new();
+
+    let res = client
+        .post(format!(
+            "https://api.{URL}/repos/{OWNER}/{REPO}/pulls/{PULL_NUMBER}/comments",
+            URL = &review.url,
+            OWNER = &review.owner,
+            REPO = &review.repo,
+            PULL_NUMBER = review.id,
+        ))
         .json(&request_body)
         .header("User-Agent", "clireview/0.0.1")
         .header("Accept", "application/vnd.github+json")
@@ -715,15 +829,15 @@ async fn main() -> Result<(), Error> {
 
     let mut pr = match command {
         Command::Init => Review::from_args(&args)?,
-        Command::Update | Command::Run | Command::Print | Command::Raw | Command::Reply => {
-            Review::from_config(Review::CONFIG_NAME)?
-        }
+        Command::Update
+        | Command::Run
+        | Command::Print
+        | Command::Raw
+        | Command::Reply
+        | Command::Comment => Review::from_config(Review::CONFIG_NAME)?,
     };
 
-    match command {
-        Command::Update => pr.update_config(&args)?,
-        _ => (),
-    }
+    pr.update_config(&args)?;
     let pr = pr;
 
     match command {
@@ -731,6 +845,7 @@ async fn main() -> Result<(), Error> {
         Command::Run => serve_comments(pr).await?,
         Command::Print => print_comments(pr).await?,
         Command::Raw => print_raw(pr).await?,
+        Command::Comment => create_comment(pr, args.commit_id, args.body, args.path).await?,
         Command::Reply => reply_to_comment(pr, args.comment, args.body).await?,
     }
     Ok(())
