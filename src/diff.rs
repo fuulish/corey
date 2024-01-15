@@ -210,13 +210,55 @@ impl Diff {
         return out;
     }
 
-    /*
-    pub fn context(&self, ignore_starting: Option<u32>) -> String {
-        for i in self.
+    // XXX: this guy should return an iterator of String because we might have multiple contexts
+    //      also supply properly expected line numbers to be able to judge if after or before
+    //      change
+    // XXX: implement missing _ignore_starting stuff
+    pub fn get_context(&self, _ignore_starting: Option<u32>) -> Option<Vec<String>> {
+        let mut res = Vec::<String>::new();
+
+        if self.context.len() == 0 {
+            return None;
+        }
+
+        for ctx in self.context.iter() {
+            let mut tmp = String::new();
+            for i in ctx.to_owned() {
+                tmp.push_str(&self.lines[(i - self.range.start) as usize]);
+                tmp.push_str("\n");
+            }
+
+            res.push(tmp.to_owned());
+        }
+
+        // XXX: remove trailing_whitespace if required
+
+        Some(res)
     }
 
-    pub fn original_context(&self, ignore_starting: Option<u32>) -> String {}
-    */
+    // XXX: refactor this, together with the above to general _impl function
+    // XXX: implement missing _ignore_starting part
+    pub fn get_original_context(&self, _ignore_starting: Option<u32>) -> Option<Vec<String>> {
+        let mut res = Vec::<String>::new();
+
+        if self.original_context.len() == 0 {
+            return None;
+        }
+
+        for ctx in self.original_context.iter() {
+            let mut tmp = String::new();
+            for i in ctx.to_owned() {
+                tmp.push_str(&self.original_lines[(i - self.original_range.start) as usize]);
+                tmp.push_str("\n");
+            }
+
+            res.push(tmp.to_owned());
+        }
+
+        // XXX: remove trailing_whitespace if required
+
+        Some(res)
+    }
 }
 
 // the typical expectation is that the context is not changed, but rather the already changed lines
