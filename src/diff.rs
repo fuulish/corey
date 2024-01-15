@@ -154,13 +154,15 @@ impl Diff {
                             context_start = stop - 1;
                             original_context_start = original_stop - 1;
                         }
-                        // add contexts
                         LineType::Addition | LineType::Deletion => {
-                            context.push(context_start..stop);
-                            original_context.push(original_context_start..original_stop);
+                            if previous_line_type == LineType::Context {
+                                context.push(context_start..stop);
+                                original_context.push(original_context_start..original_stop);
+                            }
                         }
                     }
                 }
+                previous_line_type = line_type;
             }
         }
 
