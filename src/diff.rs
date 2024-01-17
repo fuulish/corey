@@ -56,6 +56,10 @@ enum LineType {
 }
 
 impl Diff {
+    // XXX: pretty useless
+    pub fn original_line_range(&self) -> std::ops::Range<u32> {
+        self.original_range.start..self.original_range.end
+    }
     // for this, we currently assume minimal hunks with no context overlap
     // in particular for the context generation
     //  XXX: fix this
