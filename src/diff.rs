@@ -56,6 +56,10 @@ enum LineType {
 }
 
 impl Diff {
+    // XXX: pretty useless
+    pub fn original_line_range(&self) -> std::ops::Range<u32> {
+        self.original_range.start..self.original_range.end
+    }
     // for this, we currently assume minimal hunks with no context overlap
     // in particular for the context generation
     //  XXX: fix this
@@ -92,30 +96,30 @@ impl Diff {
                     .trim_end_matches("@");
 
                 let mut start_index = data.find("-").ok_or(Error::Parse)? + 1;
-                let stop_index = data.find(" ").ok_or(Error::Parse)?;
+                let original_stop_index = data.find(" ").ok_or(Error::Parse)?;
 
-                let mut comma_sep = data[start_index..stop_index].split(",");
-                start = comma_sep
-                    .next()
-                    .ok_or(Error::Parse)?
-                    .parse::<u32>()
-                    .map_err(Error::from_parse_int_error)?;
-                stop = start; // stop will be calculated from how many lines there are in the patch
-                              // XXX: could add cross-checking/precalculation here for later
-                              // verification
-                context_start = start;
-
-                start_index = data.find("+").ok_or(Error::Parse)? + 1;
-                data = data[start_index..].trim_start_matches(" "); // XXX start trim not necessary
-
-                comma_sep = data.split(",");
+                let mut comma_sep = data[start_index..original_stop_index].split(",");
                 original_start = comma_sep
                     .next()
                     .ok_or(Error::Parse)?
                     .parse::<u32>()
                     .map_err(Error::from_parse_int_error)?;
-                original_stop = start;
+                original_stop = original_start; // stop will be calculated from how many lines there are in the patch
+                                                // XXX: could add cross-checking/precalculation here for later
+                                                // verification
                 original_context_start = original_start;
+
+                start_index = data.find("+").ok_or(Error::Parse)? + 1;
+                data = data[start_index..].trim_start_matches(" "); // XXX start trim not necessary
+
+                comma_sep = data.split(",");
+                start = comma_sep
+                    .next()
+                    .ok_or(Error::Parse)?
+                    .parse::<u32>()
+                    .map_err(Error::from_parse_int_error)?;
+                stop = start;
+                context_start = start;
             } else {
                 let line_type = if line.starts_with(" ") {
                     LineType::Context
