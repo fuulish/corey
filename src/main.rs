@@ -1,6 +1,7 @@
 //! Review LSP
 //!
 //! Provides LSP interfaces for reviewing code inline in editor.
+use diff::Diff;
 use reqwest;
 use reqwest::Response;
 use serde::{Deserialize, Serialize};
@@ -90,13 +91,36 @@ struct ReviewComment {
 // XXX: fix understanding, but original is referring to a file from which was moved to another file
 impl ReviewComment {
     // XXX: this is still very much GitHub specific
-    fn line_range(&self) -> lsp_types::Range {
+    fn line_range(&self, text: &str) -> lsp_types::Range {
+        // XXX: new algorithm:
+        //      - check if line corresponds to the one in the diff
+        //          YES: we are done
+        //      - next check if we can find the proper context
+        //          - reduce context until proper context found
+        //              - calculate approximate new line location from diff notes
+
         let end = self.original_line; // range is exclusive, so 1-based inclusive end is fine for
                                       // zero-based exclusive end
         let beg = match self.original_start_line {
             Some(l) => l - 1, // start needs to be corrected, though
             None => end - 1,
         };
+
+        let line_diff = end - beg;
+
+        let diff = Diff::from_only_hunk(&self.diff_hunk, &self.path).unwrap();
+        let commented_on_text = diff.original_text(); // XXX: again, need to find correctly sided
+                                                      // text
+                                                      // XXX: add method to get enum to correctly
+                                                      // access the commented on side
+
+        let beg: u32 = match text.find(&commented_on_text) {
+            Some(index) => text[..index].matches("\n").count().try_into().unwrap(),
+            None => beg,
+        };
+
+        let end = beg + line_diff;
+
         lsp_types::Range::new(
             lsp_types::Position::new(beg, 0),
             lsp_types::Position::new(end, 0),
@@ -576,7 +600,12 @@ impl Backend {
             // XXX: the line_range below is only correct if we are on the same version as on review
             //      XXX: need to fix this line association using git internals
             //      for now, this is good enough
-            .map(|&x| lsp_types::Diagnostic::new_simple(x.line_range(), conversation.serialize(&x)))
+            .map(|&x| {
+                lsp_types::Diagnostic::new_simple(
+                    x.line_range(&params.text),
+                    conversation.serialize(&x),
+                )
+            })
             .collect();
 
         self.client
