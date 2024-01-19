@@ -81,6 +81,16 @@ struct ReviewComment {
     subject_type: Option<String>,
 }
 
+enum SubjectType {
+    Line,
+    File,
+}
+
+enum CommentSide {
+    OriginalSide,
+    Side,
+}
+
 // XXX: - ensure line-in-review to line-in-editor correspondence
 //      - double-check meaning of lines in GH API
 //      - only original_line appears to be mandatory
@@ -90,6 +100,26 @@ struct ReviewComment {
 // XXX: GitHub uses 1-based lines and lsp_types::Range uses zero-based one
 // XXX: fix understanding, but original is referring to a file from which was moved to another file
 impl ReviewComment {
+    // XXX: implement
+    fn commented_side(&self) -> CommentSide {
+        CommentSide::OriginalSide
+    }
+
+    fn get_subject_type(&self) -> SubjectType {
+        match &self.subject_type {
+            Some(subject) => {
+                if let Some(v) = subject.find("line") {
+                    SubjectType::Line
+                } else if let Some(v) = subject.find("file") {
+                    SubjectType::File
+                } else {
+                    SubjectType::Line // XXX: incorrect
+                }
+            }
+            None => SubjectType::Line, // XXX: incorrect, need to check if original_line and things
+                                       // are present
+        }
+    }
     // XXX: this is still very much GitHub specific
     fn line_range(&self, text: &str) -> lsp_types::Range {
         // XXX: new algorithm:
