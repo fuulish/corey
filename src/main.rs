@@ -137,20 +137,37 @@ impl ReviewComment {
             None => end - 1,
         };
 
-        let line_diff = end - beg;
+        let (beg, end) = match self.get_subject_type() {
+            SubjectType::File => (beg, end),
+            SubjectType::Line => {
+                let line_diff = end - beg;
 
-        let diff = Diff::from_only_hunk(&self.diff_hunk, &self.path).unwrap();
-        let commented_on_text = diff.original_text(); // XXX: again, need to find correctly sided
-                                                      // text
-                                                      // XXX: add method to get enum to correctly
-                                                      // access the commented on side
+                let diff = Diff::from_only_hunk(&self.diff_hunk, &self.path).unwrap();
 
-        let beg: u32 = match text.find(&commented_on_text) {
-            Some(index) => text[..index].matches("\n").count().try_into().unwrap(),
-            None => beg,
+                // can go looking for text() and for original_text(), but it's more likely to be some
+                // variation of test()
+                let commented_on_text = diff.text(); // XXX: again, need to find correctly sided
+                                                     // text
+                                                     // XXX: add method to get enum to correctly
+                                                     // access the commented on side
+
+                let beg: u32 = if commented_on_text.len() == 0 {
+                    beg
+                } else {
+                    match text.find(&commented_on_text) {
+                        Some(index) => {
+                            text[..index].matches("\n").count().try_into().unwrap()
+                        }
+                        None => {
+                            beg
+                        }
+                    }
+                };
+
+                let end = beg + line_diff;
+                (beg, end)
+            }
         };
-
-        let end = beg + line_diff;
 
         lsp_types::Range::new(
             lsp_types::Position::new(beg, 0),
