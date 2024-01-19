@@ -122,7 +122,7 @@ impl ReviewComment {
         }
     }
     // XXX: this is still very much GitHub specific
-    fn line_range(&self, text: &str) -> lsp_types::Range {
+    async fn line_range(&self, text: &str, client: &Client) -> lsp_types::Range {
         // XXX: new algorithm:
         //      - check if line corresponds to the one in the diff
         //          YES: we are done
@@ -151,14 +151,35 @@ impl ReviewComment {
                                                      // XXX: add method to get enum to correctly
                                                      // access the commented on side
 
+                client
+                    .log_message(
+                        lsp_types::MessageType::ERROR,
+                        format!("FUX| commented on text: {}", commented_on_text),
+                    )
+                    .await;
                 let beg: u32 = if commented_on_text.len() == 0 {
+                    client
+                        .log_message(lsp_types::MessageType::ERROR, "zero-length text")
+                        .await;
                     beg
                 } else {
                     match text.find(&commented_on_text) {
                         Some(index) => {
+                            client
+                                .log_message(lsp_types::MessageType::ERROR, "found text")
+                                .await;
                             text[..index].matches("\n").count().try_into().unwrap()
                         }
                         None => {
+                            client
+                                .log_message(
+                                    lsp_types::MessageType::ERROR,
+                                    format!(
+                                        "FUX| text: {} nowhere to be found in {}",
+                                        commented_on_text, text
+                                    ),
+                                )
+                                .await;
                             beg
                         }
                     }
@@ -173,6 +194,30 @@ impl ReviewComment {
             lsp_types::Position::new(beg, 0),
             lsp_types::Position::new(end, 0),
         )
+
+        /*
+        // XXX: this needs to become a robust method returning a range for the various permutations
+        // of line type types
+        let diff_relative_line_no = self.original_line - diff.original_line_range().start;
+
+        let commented_on_lines: Vec<_> = commented_on_text.split("\n").collect();
+        let text_lines: Vec<_> = text.split("\n").collect();
+
+        match text_lines[end as usize]
+            .find(commented_on_lines[(diff_relative_line_no - 1) as usize])
+        {
+            Some(_) => lsp_types::Range::new(
+                lsp_types::Position::new(beg, 0),
+                lsp_types::Position::new(end, 0),
+            ),
+            None => lsp_types::Range::new(
+                lsp_types::Position::new(beg, 0),
+                lsp_types::Position::new(end, 0),
+            ), // XXX: have this path continue with regular code execution
+        }
+            */
+
+        // XXX: this is not how I thought this would go
     }
 }
 
@@ -295,6 +340,14 @@ impl<'a> Conversation<'a> {
     pub fn print(&self) {
         // pretty printing of conversations
         for comment in &self.starter {
+            let _comment_diff =
+                diff::Diff::from_only_hunk(&comment.diff_hunk, &comment.path).unwrap();
+
+            for (i, ctx) in _comment_diff.get_context(None).unwrap().iter().enumerate() {
+                println!("{} {}", i, ctx);
+            }
+            // println!("{}", _comment_diff.text());
+            // XXX: just checking if it's working
             println!("|{}|", "+".repeat(NCOL));
             println!("{}", comment.path);
             println!("{}", comment.diff_hunk);
@@ -616,12 +669,14 @@ impl Backend {
         //      BUT: note that the full document text is coming through
         //      we can use that within a rope and search for the text that is within the actual
         //      commit
+        /*
         self.client
             .log_message(
                 lsp_types::MessageType::ERROR,
                 format!("FUX| text is: {}", params.text),
             )
             .await;
+        */
 
         let uri = params.uri.as_str();
 
@@ -641,20 +696,24 @@ impl Backend {
         //  compare lines from text document and the params.text
         //  check how file evolved and whether the line of interest is still present or what it has
         //  morphed into
-        let diagnostics = conversation
-            .starter
-            .iter()
-            .filter(|x| uri.contains(&x.path))
-            // XXX: the line_range below is only correct if we are on the same version as on review
-            //      XXX: need to fix this line association using git internals
-            //      for now, this is good enough
-            .map(|&x| {
-                lsp_types::Diagnostic::new_simple(
-                    x.line_range(&params.text),
-                    conversation.serialize(&x),
-                )
-            })
-            .collect();
+        let diagnostics: Vec<lsp_types::Diagnostic> = futures::future::join_all(
+            conversation
+                .starter
+                .iter()
+                .filter(|x| uri.contains(&x.path))
+                // XXX: the line_range below is only correct if we are on the same version as on review
+                //      XXX: need to fix this line association using git internals
+                //      for now, this is good enough
+                .map(|x| async {
+                    lsp_types::Diagnostic::new_simple(
+                        x.line_range(&params.text, &self.client).await,
+                        conversation.serialize(x),
+                    )
+                }),
+        )
+        .await;
+
+        // let diagnostics: Vec<lsp_types::Diagnostic> = futures::future::join_all(diagnostics).await;
 
         self.client
             .publish_diagnostics(params.uri.clone(), diagnostics, Some(params.version))
@@ -701,12 +760,14 @@ impl LanguageServer for Backend {
     }
 
     async fn did_change(&self, mut params: lsp_types::DidChangeTextDocumentParams) {
+        /*
         self.client
             .log_message(
                 lsp_types::MessageType::ERROR,
                 format!("FUX| received textDocument/didChange notification"),
             )
             .await;
+        */
         self.on_change(lsp_types::TextDocumentItem {
             uri: params.text_document.uri,
             language_id: "X".to_owned(),
