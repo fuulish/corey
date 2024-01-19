@@ -79,6 +79,7 @@ struct ReviewComment {
     diff_hunk: String,
     path: String, // XXX: should be OsString or something like that
     subject_type: Option<String>,
+    start_side: Option<String>,
 }
 
 enum SubjectType {
