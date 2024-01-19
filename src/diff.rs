@@ -197,6 +197,11 @@ impl Diff {
         }
 
         return out;
+
+        // XXX: alternatively, simply always trim the last newline
+        // out.trim_end_matches("\n").to_owned()
+        // XXX: always trimming would only be a problem if someone came and marked that single
+        // line-ending character
     }
 
     pub fn original_text(&self) -> String {
@@ -212,6 +217,9 @@ impl Diff {
         }
 
         return out;
+
+        // XXX: alternatively, simply always trim the last newline
+        // out.trim_end_matches("\n").to_owned()
     }
 
     // XXX: this guy should return an iterator of String because we might have multiple contexts
