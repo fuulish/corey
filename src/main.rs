@@ -79,6 +79,17 @@ struct ReviewComment {
     diff_hunk: String,
     path: String, // XXX: should be OsString or something like that
     subject_type: Option<String>,
+    start_side: Option<String>,
+}
+
+enum SubjectType {
+    Line,
+    File,
+}
+
+enum CommentSide {
+    OriginalSide,
+    Side,
 }
 
 // XXX: - ensure line-in-review to line-in-editor correspondence
@@ -90,6 +101,26 @@ struct ReviewComment {
 // XXX: GitHub uses 1-based lines and lsp_types::Range uses zero-based one
 // XXX: fix understanding, but original is referring to a file from which was moved to another file
 impl ReviewComment {
+    // XXX: implement
+    fn commented_side(&self) -> CommentSide {
+        CommentSide::OriginalSide
+    }
+
+    fn get_subject_type(&self) -> SubjectType {
+        match &self.subject_type {
+            Some(subject) => {
+                if let Some(v) = subject.find("line") {
+                    SubjectType::Line
+                } else if let Some(v) = subject.find("file") {
+                    SubjectType::File
+                } else {
+                    SubjectType::Line // XXX: incorrect
+                }
+            }
+            None => SubjectType::Line, // XXX: incorrect, need to check if original_line and things
+                                       // are present
+        }
+    }
     // XXX: this is still very much GitHub specific
     fn line_range(&self, text: &str) -> lsp_types::Range {
         // XXX: new algorithm:
@@ -106,20 +137,37 @@ impl ReviewComment {
             None => end - 1,
         };
 
-        let line_diff = end - beg;
+        let (beg, end) = match self.get_subject_type() {
+            SubjectType::File => (beg, end),
+            SubjectType::Line => {
+                let line_diff = end - beg;
 
-        let diff = Diff::from_only_hunk(&self.diff_hunk, &self.path).unwrap();
-        let commented_on_text = diff.original_text(); // XXX: again, need to find correctly sided
-                                                      // text
-                                                      // XXX: add method to get enum to correctly
-                                                      // access the commented on side
+                let diff = Diff::from_only_hunk(&self.diff_hunk, &self.path).unwrap();
 
-        let beg: u32 = match text.find(&commented_on_text) {
-            Some(index) => text[..index].matches("\n").count().try_into().unwrap(),
-            None => beg,
+                // can go looking for text() and for original_text(), but it's more likely to be some
+                // variation of test()
+                let commented_on_text = diff.text(); // XXX: again, need to find correctly sided
+                                                     // text
+                                                     // XXX: add method to get enum to correctly
+                                                     // access the commented on side
+
+                let beg: u32 = if commented_on_text.len() == 0 {
+                    beg
+                } else {
+                    match text.find(&commented_on_text) {
+                        Some(index) => {
+                            text[..index].matches("\n").count().try_into().unwrap()
+                        }
+                        None => {
+                            beg
+                        }
+                    }
+                };
+
+                let end = beg + line_diff;
+                (beg, end)
+            }
         };
-
-        let end = beg + line_diff;
 
         lsp_types::Range::new(
             lsp_types::Position::new(beg, 0),
