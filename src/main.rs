@@ -122,6 +122,105 @@ impl ReviewComment {
         }
     }
     // XXX: this is still very much GitHub specific
+    #[cfg(feature = "debug")]
+    async fn line_range(&self, text: &str, client: &Client) -> lsp_types::Range {
+        // XXX: new algorithm:
+        //      - check if line corresponds to the one in the diff
+        //          YES: we are done
+        //      - next check if we can find the proper context
+        //          - reduce context until proper context found
+        //              - calculate approximate new line location from diff notes
+
+        let end = self.original_line; // range is exclusive, so 1-based inclusive end is fine for
+                                      // zero-based exclusive end
+        let beg = match self.original_start_line {
+            Some(l) => l - 1, // start needs to be corrected, though
+            None => end - 1,
+        };
+
+        let (beg, end) = match self.get_subject_type() {
+            SubjectType::File => (beg, end),
+            SubjectType::Line => {
+                let line_diff = end - beg;
+
+                let diff = Diff::from_only_hunk(&self.diff_hunk, &self.path).unwrap();
+
+                // can go looking for text() and for original_text(), but it's more likely to be some
+                // variation of test()
+                let commented_on_text = diff.text(); // XXX: again, need to find correctly sided
+                                                     // text
+                                                     // XXX: add method to get enum to correctly
+                                                     // access the commented on side
+
+                client
+                    .log_message(
+                        lsp_types::MessageType::ERROR,
+                        format!("FUX| commented on text: {}", commented_on_text),
+                    )
+                    .await;
+                let beg: u32 = if commented_on_text.len() == 0 {
+                    client
+                        .log_message(lsp_types::MessageType::ERROR, "zero-length text")
+                        .await;
+                    beg
+                } else {
+                    match text.find(&commented_on_text) {
+                        Some(index) => {
+                            client
+                                .log_message(lsp_types::MessageType::ERROR, "found text")
+                                .await;
+                            text[..index].matches("\n").count().try_into().unwrap()
+                        }
+                        None => {
+                            client
+                                .log_message(
+                                    lsp_types::MessageType::ERROR,
+                                    format!(
+                                        "FUX| text: {} nowhere to be found in {}",
+                                        commented_on_text, text
+                                    ),
+                                )
+                                .await;
+                            beg
+                        }
+                    }
+                };
+
+                let end = beg + line_diff;
+                (beg, end)
+            }
+        };
+
+        lsp_types::Range::new(
+            lsp_types::Position::new(beg, 0),
+            lsp_types::Position::new(end, 0),
+        )
+
+        /*
+        // XXX: this needs to become a robust method returning a range for the various permutations
+        // of line type types
+        let diff_relative_line_no = self.original_line - diff.original_line_range().start;
+
+        let commented_on_lines: Vec<_> = commented_on_text.split("\n").collect();
+        let text_lines: Vec<_> = text.split("\n").collect();
+
+        match text_lines[end as usize]
+            .find(commented_on_lines[(diff_relative_line_no - 1) as usize])
+        {
+            Some(_) => lsp_types::Range::new(
+                lsp_types::Position::new(beg, 0),
+                lsp_types::Position::new(end, 0),
+            ),
+            None => lsp_types::Range::new(
+                lsp_types::Position::new(beg, 0),
+                lsp_types::Position::new(end, 0),
+            ), // XXX: have this path continue with regular code execution
+        }
+            */
+
+        // XXX: this is not how I thought this would go
+    }
+    #[cfg(not(feature = "debug"))]
     fn line_range(&self, text: &str) -> lsp_types::Range {
         // XXX: new algorithm:
         //      - check if line corresponds to the one in the diff
@@ -155,12 +254,8 @@ impl ReviewComment {
                     beg
                 } else {
                     match text.find(&commented_on_text) {
-                        Some(index) => {
-                            text[..index].matches("\n").count().try_into().unwrap()
-                        }
-                        None => {
-                            beg
-                        }
+                        Some(index) => text[..index].matches("\n").count().try_into().unwrap(),
+                        None => beg,
                     }
                 };
 
@@ -641,6 +736,24 @@ impl Backend {
         //  compare lines from text document and the params.text
         //  check how file evolved and whether the line of interest is still present or what it has
         //  morphed into
+        #[cfg(feature = "debug")]
+        let diagnostics: Vec<lsp_types::Diagnostic> = futures::future::join_all(
+            conversation
+                .starter
+                .iter()
+                .filter(|x| uri.contains(&x.path))
+                // XXX: the line_range below is only correct if we are on the same version as on review
+                //      XXX: need to fix this line association using git internals
+                //      for now, this is good enough
+                .map(|x| async {
+                    lsp_types::Diagnostic::new_simple(
+                        x.line_range(&params.text, &self.client).await,
+                        conversation.serialize(x),
+                    )
+                }),
+        )
+        .await;
+        #[cfg(not(feature = "debug"))]
         let diagnostics = conversation
             .starter
             .iter()
