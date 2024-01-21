@@ -711,6 +711,7 @@ impl Backend {
         //      BUT: note that the full document text is coming through
         //      we can use that within a rope and search for the text that is within the actual
         //      commit
+        #[cfg(feature = "message_tracing")]
         self.client
             .log_message(
                 lsp_types::MessageType::ERROR,
@@ -814,6 +815,7 @@ impl LanguageServer for Backend {
     }
 
     async fn did_change(&self, mut params: lsp_types::DidChangeTextDocumentParams) {
+        #[cfg(feature = "message_tracing")]
         self.client
             .log_message(
                 lsp_types::MessageType::ERROR,
