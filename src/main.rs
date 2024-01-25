@@ -123,7 +123,7 @@ impl ReviewComment {
     }
     // XXX: this is still very much GitHub specific
     #[cfg(feature = "debug")]
-    async fn line_range(&self, text: &str, client: &Client) -> Result<lsp_types::Range> {
+    async fn line_range(&self, text: &str, client: &Client) -> lsp_types::Range {
         // XXX: new algorithm:
         //      - check if line corresponds to the one in the diff
         //          YES: we are done
@@ -143,8 +143,7 @@ impl ReviewComment {
             SubjectType::Line => {
                 let line_diff = end - beg;
 
-                let diff = Diff::from_only_hunk(&self.diff_hunk, &self.path)
-                    .map_err(Error::from_diff_error)?;
+                let diff = Diff::from_only_hunk(&self.diff_hunk, &self.path).unwrap();
 
                 // can go looking for text() and for original_text(), but it's more likely to be some
                 // variation of test()
@@ -222,7 +221,7 @@ impl ReviewComment {
         // XXX: this is not how I thought this would go
     }
     #[cfg(not(feature = "debug"))]
-    fn line_range(&self, text: &str) -> Result<lsp_types::Range, Error> {
+    fn line_range(&self, text: &str) -> lsp_types::Range {
         // XXX: new algorithm:
         //      - check if line corresponds to the one in the diff
         //          YES: we are done
@@ -242,8 +241,7 @@ impl ReviewComment {
             SubjectType::Line => {
                 let line_diff = end - beg;
 
-                let diff = Diff::from_only_hunk(&self.diff_hunk, &self.path)
-                    .map_err(Error::from_diff_error)?;
+                let diff = Diff::from_only_hunk(&self.diff_hunk, &self.path).unwrap();
 
                 // can go looking for text() and for original_text(), but it's more likely to be some
                 // variation of test()
@@ -266,10 +264,10 @@ impl ReviewComment {
             }
         };
 
-        Ok(lsp_types::Range::new(
+        lsp_types::Range::new(
             lsp_types::Position::new(beg, 0),
             lsp_types::Position::new(end, 0),
-        ))
+        )
     }
 }
 
@@ -757,22 +755,6 @@ impl Backend {
         )
         .await;
         #[cfg(not(feature = "debug"))]
-        let lines_n_comments: Vec<_> = conversation
-            .starter
-            .iter()
-            .filter(|x| uri.contains(&x.path))
-            .map(|&x| (x.line_range(&params.text), x))
-            .collect();
-
-        let diagnostics: Vec<_> = lines_n_comments
-            .into_iter()
-            .filter(|x| x.0.is_ok())
-            .map(|x| lsp_types::Diagnostic::new_simple(x.0.unwrap(), conversation.serialize(x.1)))
-            .collect();
-
-        // XXX: also take care of the error cases, but it's possible anymore because of into_iter()
-
-        /*
         let diagnostics = conversation
             .starter
             .iter()
@@ -787,7 +769,6 @@ impl Backend {
                 )
             })
             .collect();
-        */
 
         self.client
             .publish_diagnostics(params.uri.clone(), diagnostics, Some(params.version))
