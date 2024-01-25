@@ -763,7 +763,7 @@ impl Backend {
                 #[cfg(feature = "debug")]
                 match comm.line_range(&params.text, &self.client).await {
                     Ok(rng) => lines_n_comments.push((rng, comm)),
-                    Err(_) => error_n_comments.push((comm.id, comm)),
+                    Err(_) => error_n_comments.push(comm),
                 };
                 #[cfg(not(feature = "debug"))]
                 match comm.line_range(&params.text) {
