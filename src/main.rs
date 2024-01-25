@@ -757,21 +757,32 @@ impl Backend {
         // XXX: or directly serialize conversation in the first loop
         let mut lines_n_comments: Vec<(lsp_types::Range, &ReviewComment)> = Vec::new();
         let mut error_n_comments: Vec<&ReviewComment> = Vec::new();
-        let relevant_comments = conversation.starter.iter();
 
         for &comm in &conversation.starter {
             if uri.contains(&comm.path) {
                 #[cfg(feature = "debug")]
                 match comm.line_range(&params.text, &self.client).await {
                     Ok(rng) => lines_n_comments.push((rng, comm)),
-                    Err(_) => error_n_comments.push(comm), // XXX: collect and publish errors
+                    Err(_) => error_n_comments.push((comm.id, comm)),
                 };
                 #[cfg(not(feature = "debug"))]
                 match comm.line_range(&params.text) {
                     Ok(rng) => lines_n_comments.push((rng, comm)),
-                    Err(_) => error_n_comments.push(comm), // XXX: collect and publish errors
+                    Err(_) => error_n_comments.push(comm),
                 };
             }
+        }
+
+        for &err in &error_n_comments {
+            self.client
+                .log_message(
+                    lsp_types::MessageType::ERROR,
+                    format!(
+                        "could not locate lines for conversation starter with id: {}",
+                        err.id
+                    ),
+                )
+                .await;
         }
 
         let diagnostics: Vec<_> = lines_n_comments
