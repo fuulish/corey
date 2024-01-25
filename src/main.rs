@@ -757,7 +757,6 @@ impl Backend {
         // XXX: or directly serialize conversation in the first loop
         let mut lines_n_comments: Vec<(lsp_types::Range, &ReviewComment)> = Vec::new();
         let mut error_n_comments: Vec<&ReviewComment> = Vec::new();
-        let relevant_comments = conversation.starter.iter();
 
         for &comm in &conversation.starter {
             if uri.contains(&comm.path) {
