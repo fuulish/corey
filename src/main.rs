@@ -10,6 +10,7 @@ use tower_lsp::lsp_types::ServerCapabilities;
 use bytes::Bytes;
 
 use core::fmt;
+use std::num::TryFromIntError;
 use std::{collections::HashMap, fs};
 
 use tower_lsp::jsonrpc;
@@ -34,6 +35,7 @@ enum Error {
     UTF8Error(std::str::Utf8Error),
     RequestError(reqwest::StatusCode),
     DiffError,
+    ParseError,
 }
 
 impl std::error::Error for Error {}
@@ -53,6 +55,7 @@ impl fmt::Display for Error {
             Error::UTF8Error(_) => "UTF8 decoding error".to_owned(),
             Error::RequestError(err) => format!("Request error: {}", err),
             Error::DiffError => format!("Error processing diff"),
+            Error::ParseError => "error parsing".to_owned(),
         };
         f.write_str(&msg)
     }
@@ -123,7 +126,7 @@ impl ReviewComment {
     }
     // XXX: this is still very much GitHub specific
     #[cfg(feature = "debug")]
-    async fn line_range(&self, text: &str, client: &Client) -> lsp_types::Range {
+    async fn line_range(&self, text: &str, client: &Client) -> Result<lsp_types::Range, Error> {
         // XXX: new algorithm:
         //      - check if line corresponds to the one in the diff
         //          YES: we are done
@@ -143,7 +146,8 @@ impl ReviewComment {
             SubjectType::Line => {
                 let line_diff = end - beg;
 
-                let diff = Diff::from_only_hunk(&self.diff_hunk, &self.path).unwrap();
+                let diff = Diff::from_only_hunk(&self.diff_hunk, &self.path)
+                    .map_err(Error::from_diff_error)?;
 
                 // can go looking for text() and for original_text(), but it's more likely to be some
                 // variation of test()
@@ -169,7 +173,11 @@ impl ReviewComment {
                             client
                                 .log_message(lsp_types::MessageType::ERROR, "found text")
                                 .await;
-                            text[..index].matches("\n").count().try_into().unwrap()
+                            text[..index]
+                                .matches("\n")
+                                .count()
+                                .try_into()
+                                .map_err(Error::try_from_int_error)?
                         }
                         None => {
                             client
@@ -191,10 +199,10 @@ impl ReviewComment {
             }
         };
 
-        lsp_types::Range::new(
+        Ok(lsp_types::Range::new(
             lsp_types::Position::new(beg, 0),
             lsp_types::Position::new(end, 0),
-        )
+        ))
 
         /*
         // XXX: this needs to become a robust method returning a range for the various permutations
@@ -221,7 +229,7 @@ impl ReviewComment {
         // XXX: this is not how I thought this would go
     }
     #[cfg(not(feature = "debug"))]
-    fn line_range(&self, text: &str) -> lsp_types::Range {
+    fn line_range(&self, text: &str) -> Result<lsp_types::Range, Error> {
         // XXX: new algorithm:
         //      - check if line corresponds to the one in the diff
         //          YES: we are done
@@ -241,7 +249,8 @@ impl ReviewComment {
             SubjectType::Line => {
                 let line_diff = end - beg;
 
-                let diff = Diff::from_only_hunk(&self.diff_hunk, &self.path).unwrap();
+                let diff = Diff::from_only_hunk(&self.diff_hunk, &self.path)
+                    .map_err(Error::from_diff_error)?;
 
                 // can go looking for text() and for original_text(), but it's more likely to be some
                 // variation of test()
@@ -254,7 +263,11 @@ impl ReviewComment {
                     beg
                 } else {
                     match text.find(&commented_on_text) {
-                        Some(index) => text[..index].matches("\n").count().try_into().unwrap(),
+                        Some(index) => text[..index]
+                            .matches("\n")
+                            .count()
+                            .try_into()
+                            .map_err(Error::try_from_int_error)?,
                         None => beg,
                     }
                 };
@@ -264,10 +277,10 @@ impl ReviewComment {
             }
         };
 
-        lsp_types::Range::new(
+        Ok(lsp_types::Range::new(
             lsp_types::Position::new(beg, 0),
             lsp_types::Position::new(end, 0),
-        )
+        ))
     }
 }
 
@@ -290,6 +303,9 @@ impl Error {
     }
     fn from_diff_error(err: diff::Error) -> Error {
         Error::DiffError
+    }
+    fn try_from_int_error(err: TryFromIntError) -> Error {
+        Error::ParseError
     }
 }
 
@@ -737,37 +753,30 @@ impl Backend {
         //  compare lines from text document and the params.text
         //  check how file evolved and whether the line of interest is still present or what it has
         //  morphed into
-        #[cfg(feature = "debug")]
-        let diagnostics: Vec<lsp_types::Diagnostic> = futures::future::join_all(
-            conversation
-                .starter
-                .iter()
-                .filter(|x| uri.contains(&x.path))
-                // XXX: the line_range below is only correct if we are on the same version as on review
-                //      XXX: need to fix this line association using git internals
-                //      for now, this is good enough
-                .map(|x| async {
-                    lsp_types::Diagnostic::new_simple(
-                        x.line_range(&params.text, &self.client).await,
-                        conversation.serialize(x),
-                    )
-                }),
-        )
-        .await;
-        #[cfg(not(feature = "debug"))]
-        let diagnostics = conversation
-            .starter
+
+        // XXX: or directly serialize conversation in the first loop
+        let mut lines_n_comments: Vec<(lsp_types::Range, &ReviewComment)> = Vec::new();
+        let mut error_n_comments: Vec<&ReviewComment> = Vec::new();
+        let relevant_comments = conversation.starter.iter();
+
+        for &comm in &conversation.starter {
+            if uri.contains(&comm.path) {
+                #[cfg(feature = "debug")]
+                match comm.line_range(&params.text, &self.client).await {
+                    Ok(rng) => lines_n_comments.push((rng, comm)),
+                    Err(_) => error_n_comments.push(comm), // XXX: collect and publish errors
+                };
+                #[cfg(not(feature = "debug"))]
+                match comm.line_range(&params.text) {
+                    Ok(rng) => lines_n_comments.push((rng, comm)),
+                    Err(_) => error_n_comments.push(comm), // XXX: collect and publish errors
+                };
+            }
+        }
+
+        let diagnostics: Vec<_> = lines_n_comments
             .iter()
-            .filter(|x| uri.contains(&x.path))
-            // XXX: the line_range below is only correct if we are on the same version as on review
-            //      XXX: need to fix this line association using git internals
-            //      for now, this is good enough
-            .map(|&x| {
-                lsp_types::Diagnostic::new_simple(
-                    x.line_range(&params.text),
-                    conversation.serialize(&x),
-                )
-            })
+            .map(|&x| lsp_types::Diagnostic::new_simple(x.0, conversation.serialize(x.1)))
             .collect();
 
         self.client
