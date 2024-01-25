@@ -193,7 +193,10 @@ impl Diff {
         }
 
         if !self.trailing_newline {
-            out = out.strip_suffix("\n").unwrap().to_owned();
+            out = match out.strip_suffix("\n") {
+                Some(v) => v.to_owned(),
+                None => out,
+            };
         }
 
         return out;
@@ -213,7 +216,10 @@ impl Diff {
         }
 
         if !self.trailing_newline {
-            out = out.strip_suffix("\n").unwrap().to_owned();
+            out = match out.strip_suffix("\n") {
+                Some(v) => v.to_owned(),
+                None => out,
+            };
         }
 
         return out;
