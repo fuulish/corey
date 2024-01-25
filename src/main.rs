@@ -10,6 +10,7 @@ use tower_lsp::lsp_types::ServerCapabilities;
 use bytes::Bytes;
 
 use core::fmt;
+use std::num::TryFromIntError;
 use std::{collections::HashMap, fs};
 
 use tower_lsp::jsonrpc;
@@ -34,6 +35,7 @@ enum Error {
     UTF8Error(std::str::Utf8Error),
     RequestError(reqwest::StatusCode),
     DiffError,
+    ParseError,
 }
 
 impl std::error::Error for Error {}
@@ -53,6 +55,7 @@ impl fmt::Display for Error {
             Error::UTF8Error(_) => "UTF8 decoding error".to_owned(),
             Error::RequestError(err) => format!("Request error: {}", err),
             Error::DiffError => format!("Error processing diff"),
+            Error::ParseError => "error parsing".to_owned(),
         };
         f.write_str(&msg)
     }
@@ -170,7 +173,11 @@ impl ReviewComment {
                             client
                                 .log_message(lsp_types::MessageType::ERROR, "found text")
                                 .await;
-                            text[..index].matches("\n").count().try_into().unwrap()
+                            text[..index]
+                                .matches("\n")
+                                .count()
+                                .try_into()
+                                .map_err(Error::try_from_int_error)?
                         }
                         None => {
                             client
@@ -256,7 +263,11 @@ impl ReviewComment {
                     beg
                 } else {
                     match text.find(&commented_on_text) {
-                        Some(index) => text[..index].matches("\n").count().try_into().unwrap(),
+                        Some(index) => text[..index]
+                            .matches("\n")
+                            .count()
+                            .try_into()
+                            .map_err(Error::try_from_int_error)?,
                         None => beg,
                     }
                 };
@@ -292,6 +303,9 @@ impl Error {
     }
     fn from_diff_error(err: diff::Error) -> Error {
         Error::DiffError
+    }
+    fn try_from_int_error(err: TryFromIntError) -> Error {
+        Error::ParseError
     }
 }
 
