@@ -18,7 +18,7 @@ impl fmt::Display for Error {
     }
 }
 
-use std::num::ParseIntError;
+use std::{num::ParseIntError, ops::Range};
 
 impl Error {
     fn from_parse_int_error(err: ParseIntError) -> Error {
@@ -34,7 +34,6 @@ pub struct Diff {
     range: std::ops::Range<u32>,
     original_lines: std::vec::Vec<String>,
     lines: std::vec::Vec<String>,
-    // original_context: std::vec::Vec<std::ops::Range<u32>>,
     context: std::vec::Vec<std::ops::Range<u32>>, // only one context needed, because it's common
     // XXX: unless there are movements between files
     // XXX: we are dealing with single file diffs,
@@ -44,7 +43,6 @@ pub struct Diff {
     //    XXX: should be able to handle those as well
     //    XXX: multi-file diffs do not share context,
     //    do they?
-    original_context: std::vec::Vec<std::ops::Range<u32>>,
     trailing_newline: bool,
 }
 
@@ -78,9 +76,7 @@ impl Diff {
         let mut original_stop: u32 = 0;
 
         let mut context = std::vec::Vec::<std::ops::Range<u32>>::new();
-        let mut original_context = std::vec::Vec::<std::ops::Range<u32>>::new();
         let mut context_start: u32 = 0; // 0 is not a valid line number (how about using something uninitialized?)
-        let mut original_context_start: u32 = 0; // 0 is not a valid line number (how about using something uninitialized?)
 
         let mut previous_line_type = LineType::Context;
 
@@ -107,7 +103,6 @@ impl Diff {
                 original_stop = original_start; // stop will be calculated from how many lines there are in the patch
                                                 // XXX: could add cross-checking/precalculation here for later
                                                 // verification
-                original_context_start = original_start;
 
                 start_index = data.find("+").ok_or(Error::Parse)? + 1;
                 data = data[start_index..].trim_start_matches(" "); // XXX start trim not necessary
@@ -156,12 +151,10 @@ impl Diff {
                         LineType::Context => {
                             // start new context
                             context_start = stop - 1;
-                            original_context_start = original_stop - 1;
                         }
                         LineType::Addition | LineType::Deletion => {
                             if previous_line_type == LineType::Context {
                                 context.push(context_start..stop);
-                                original_context.push(original_context_start..original_stop);
                             }
                         }
                     }
@@ -177,7 +170,6 @@ impl Diff {
             original_lines,
             lines,
             context,
-            original_context,
             trailing_newline,
         })
     }
@@ -205,6 +197,30 @@ impl Diff {
         // out.trim_end_matches("\n").to_owned()
         // XXX: always trimming would only be a problem if someone came and marked that single
         // line-ending character
+    }
+
+    pub async fn text_part(&self, part: Range<u32>) -> Result<String, Error> {
+        let mut out = String::new();
+
+        if !(self.original_range.contains(&part.start) && self.original_range.contains(&part.end)) {
+            return Err(Error::Invalid);
+        };
+        let start = part.start - self.original_range.start;
+        let end = start + part.end - part.start;
+
+        for line_index in start..end {
+            out.push_str(&self.lines[line_index as usize]);
+            out.push_str("\n"); // XXX: superfluous?/could check hunk if it contains a trailing \n
+        }
+
+        if !self.trailing_newline {
+            out = match out.strip_suffix("\n") {
+                Some(v) => v.to_owned(),
+                None => out,
+            };
+        }
+
+        return Ok(out);
     }
 
     pub fn original_text(&self) -> String {
@@ -243,30 +259,6 @@ impl Diff {
             let mut tmp = String::new();
             for i in ctx.to_owned() {
                 tmp.push_str(&self.lines[(i - self.range.start) as usize]);
-                tmp.push_str("\n");
-            }
-
-            res.push(tmp.to_owned());
-        }
-
-        // XXX: remove trailing_whitespace if required
-
-        Some(res)
-    }
-
-    // XXX: refactor this, together with the above to general _impl function
-    // XXX: implement missing _ignore_starting part
-    pub fn get_original_context(&self, _ignore_starting: Option<u32>) -> Option<Vec<String>> {
-        let mut res = Vec::<String>::new();
-
-        if self.original_context.len() == 0 {
-            return None;
-        }
-
-        for ctx in self.original_context.iter() {
-            let mut tmp = String::new();
-            for i in ctx.to_owned() {
-                tmp.push_str(&self.original_lines[(i - self.original_range.start) as usize]);
                 tmp.push_str("\n");
             }
 
