@@ -95,6 +95,15 @@ enum CommentSide {
     Side,
 }
 
+enum LineRange {
+    InPlace(lsp_types::Range),
+    Moved(lsp_types::Range),
+    Modified(lsp_types::Range),
+    // XXX: maybe re-integrate that
+    // NoText,
+    // NotFound,
+}
+
 // XXX: - ensure line-in-review to line-in-editor correspondence
 //      - double-check meaning of lines in GH API
 //      - only original_line appears to be mandatory
@@ -126,7 +135,8 @@ impl ReviewComment {
     }
     // XXX: this is still very much GitHub specific
     #[cfg(feature = "debug")]
-    async fn line_range(&self, text: &str, client: &Client) -> Result<lsp_types::Range, Error> {
+    // XXX: how about using an error type, instead of Result things
+    async fn line_range(&self, text: &str, client: &Client) -> Result<LineRange, Error> {
         // XXX: new algorithm:
         //      - check if line corresponds to the one in the diff
         //          YES: we are done
@@ -141,7 +151,7 @@ impl ReviewComment {
             None => end - 1,
         };
 
-        let (beg, end) = match self.get_subject_type() {
+        let (beg_diff, end_diff) = match self.get_subject_type() {
             SubjectType::File => (beg, end),
             SubjectType::Line => {
                 let line_diff = end - beg;
@@ -150,11 +160,11 @@ impl ReviewComment {
                     .map_err(Error::from_diff_error)?;
 
                 // can go looking for text() and for original_text(), but it's more likely to be some
-                // variation of test()
-                let commented_on_text = diff.text(); // XXX: again, need to find correctly sided
-                                                     // text
-                                                     // XXX: add method to get enum to correctly
-                                                     // access the commented on side
+                // variation of text()
+                let commented_on_text = diff.text_part(beg..end).await.unwrap(); // XXX: again, need to find correctly sided
+                                                                                 // text
+                                                                                 // XXX: add method to get enum to correctly
+                                                                                 // access the commented on side
 
                 client
                     .log_message(
@@ -199,11 +209,30 @@ impl ReviewComment {
             }
         };
 
-        Ok(lsp_types::Range::new(
-            lsp_types::Position::new(beg, 0),
-            lsp_types::Position::new(end, 0),
-        ))
+        let final_range = lsp_types::Range::new(
+            lsp_types::Position::new(beg_diff, 0),
+            lsp_types::Position::new(end_diff, 0),
+        );
 
+        if beg == beg_diff && end == end_diff {
+            client
+                .log_message(lsp_types::MessageType::ERROR, "InPlace")
+                .await;
+            Ok(LineRange::InPlace(final_range))
+        } else if (beg_diff as i32 - beg as i32) == (end_diff as i32 - end as i32) {
+            // XXX: should also be larger than zero,
+            // however that's sorta guaranteed by
+            // beg/end being larger
+            client
+                .log_message(lsp_types::MessageType::ERROR, "Moved")
+                .await;
+            Ok(LineRange::Moved(final_range))
+        } else {
+            client
+                .log_message(lsp_types::MessageType::ERROR, "Modified")
+                .await;
+            Ok(LineRange::Modified(final_range))
+        }
         /*
         // XXX: this needs to become a robust method returning a range for the various permutations
         // of line type types
@@ -755,7 +784,7 @@ impl Backend {
         //  morphed into
 
         // XXX: or directly serialize conversation in the first loop
-        let mut lines_n_comments: Vec<(lsp_types::Range, &ReviewComment)> = Vec::new();
+        let mut lines_n_comments: Vec<(LineRange, &ReviewComment)> = Vec::new();
         let mut error_n_comments: Vec<&ReviewComment> = Vec::new();
 
         for &comm in &conversation.starter {
@@ -787,7 +816,18 @@ impl Backend {
 
         let diagnostics: Vec<_> = lines_n_comments
             .iter()
-            .map(|&x| lsp_types::Diagnostic::new_simple(x.0, conversation.serialize(x.1)))
+            .map(|x| {
+                let comm = x.1;
+                let (msg, rng) = match x.0 {
+                    LineRange::Moved(v) => (format!("moved: "), v),
+                    LineRange::InPlace(v) => (format!(""), v),
+                    LineRange::Modified(v) => (format!("modified: "), v),
+                };
+                lsp_types::Diagnostic::new_simple(
+                    rng,
+                    format!("{msg}{}", conversation.serialize(comm)),
+                )
+            })
             .collect();
 
         self.client

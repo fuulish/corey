@@ -18,7 +18,7 @@ impl fmt::Display for Error {
     }
 }
 
-use std::num::ParseIntError;
+use std::{num::ParseIntError, ops::Range};
 
 impl Error {
     fn from_parse_int_error(err: ParseIntError) -> Error {
@@ -197,6 +197,30 @@ impl Diff {
         // out.trim_end_matches("\n").to_owned()
         // XXX: always trimming would only be a problem if someone came and marked that single
         // line-ending character
+    }
+
+    pub async fn text_part(&self, part: Range<u32>) -> Result<String, Error> {
+        let mut out = String::new();
+
+        if !(self.original_range.contains(&part.start) && self.original_range.contains(&part.end)) {
+            return Err(Error::Invalid);
+        };
+        let start = part.start - self.original_range.start;
+        let end = start + part.end - part.start;
+
+        for line_index in start..end {
+            out.push_str(&self.lines[line_index as usize]);
+            out.push_str("\n"); // XXX: superfluous?/could check hunk if it contains a trailing \n
+        }
+
+        if !self.trailing_newline {
+            out = match out.strip_suffix("\n") {
+                Some(v) => v.to_owned(),
+                None => out,
+            };
+        }
+
+        return Ok(out);
     }
 
     pub fn original_text(&self) -> String {
