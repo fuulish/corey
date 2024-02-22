@@ -82,7 +82,8 @@ struct ReviewComment {
     diff_hunk: String,
     path: String, // XXX: should be OsString or something like that
     subject_type: Option<String>,
-    start_side: Option<String>,
+    start_side: Option<String>, // for ranged comments the side on which comment began
+    side: Option<String>,       // in split view the side the comment applies to
 }
 
 enum SubjectType {
