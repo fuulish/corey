@@ -162,10 +162,13 @@ impl ReviewComment {
 
                 // can go looking for text() and for original_text(), but it's more likely to be some
                 // variation of text()
-                let commented_on_text = diff.text_part(beg..end).await.unwrap(); // XXX: again, need to find correctly sided
-                                                                                 // text
-                                                                                 // XXX: add method to get enum to correctly
-                                                                                 // access the commented on side
+                let commented_on_text = diff
+                    .text_part(beg..end)
+                    .await
+                    .map_err(Error::from_diff_error)?; // XXX: again, need to find correctly sided
+                                                       // text
+                                                       // XXX: add method to get enum to correctly
+                                                       // access the commented on side
 
                 client
                     .log_message(
