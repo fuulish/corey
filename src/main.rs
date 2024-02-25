@@ -134,6 +134,7 @@ impl ReviewComment {
                                        // are present
         }
     }
+    // XXX: the range is currently 1-based, because line numbers are 1-based -> should this be so?
     // XXX: this is still very much GitHub specific
     #[cfg(feature = "debug")]
     // XXX: how about using an error type, instead of Result things
@@ -145,12 +146,18 @@ impl ReviewComment {
         //          - reduce context until proper context found
         //              - calculate approximate new line location from diff notes
 
-        let end = self.original_line; // range is exclusive, so 1-based inclusive end is fine for
-                                      // zero-based exclusive end
+        let end = self.original_line + 1; // range is exclusive, so 1-based inclusive end is fine for
+                                          // zero-based exclusive end
         let beg = match self.original_start_line {
-            Some(l) => l - 1, // start needs to be corrected, though
+            Some(l) => l, // start needs to be corrected, though
             None => end - 1,
         };
+        client
+            .log_message(
+                lsp_types::MessageType::ERROR,
+                format!("FUX| beg is: {}", beg),
+            )
+            .await;
 
         let (beg_diff, end_diff) = match self.get_subject_type() {
             SubjectType::File => (beg, end),
@@ -160,6 +167,15 @@ impl ReviewComment {
                 let diff = Diff::from_only_hunk(&self.diff_hunk, &self.path)
                     .map_err(Error::from_diff_error)?;
 
+                client
+                    .log_message(
+                        lsp_types::MessageType::ERROR,
+                        format!(
+                            "FUX| original range: {}..{}\nnew lines: {}..{}",
+                            diff.original_range.start, diff.original_range.end, beg, end
+                        ),
+                    )
+                    .await;
                 // can go looking for text() and for original_text(), but it's more likely to be some
                 // variation of text()
                 let commented_on_text = diff
@@ -187,11 +203,13 @@ impl ReviewComment {
                             client
                                 .log_message(lsp_types::MessageType::ERROR, "found text")
                                 .await;
-                            text[..index]
+                            // XXX: how to condense the following into one line?
+                            let n_preceding: u32 = text[..index]
                                 .matches("\n")
                                 .count()
                                 .try_into()
-                                .map_err(Error::try_from_int_error)?
+                                .map_err(Error::try_from_int_error)?;
+                            n_preceding + 1
                         }
                         None => {
                             client
@@ -214,9 +232,18 @@ impl ReviewComment {
         };
 
         let final_range = lsp_types::Range::new(
-            lsp_types::Position::new(beg_diff, 0),
-            lsp_types::Position::new(end_diff, 0),
+            // lsp_types::Position are 'zero-based line and character offset[s]'
+            // https://docs.rs/lsp-types/latest/lsp_types/struct.Position.html
+            lsp_types::Position::new(beg_diff - 1, 0),
+            lsp_types::Position::new(end_diff - 1, 0),
         );
+
+        client
+            .log_message(
+                lsp_types::MessageType::ERROR,
+                format!("FUX| final beg: {beg_diff} end: {end_diff}"),
+            )
+            .await;
 
         if beg == beg_diff && end == end_diff {
             client

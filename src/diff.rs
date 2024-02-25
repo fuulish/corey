@@ -30,6 +30,9 @@ impl Error {
 pub struct Diff {
     path: String, // XXX: use std::path::Path?
     // XXX: also include original_path? (not needed, ATM)
+    #[cfg(feature = "debug")]
+    pub original_range: std::ops::Range<u32>,
+    #[cfg(not(feature = "debug"))]
     original_range: std::ops::Range<u32>,
     range: std::ops::Range<u32>,
     original_lines: std::vec::Vec<String>,
@@ -202,9 +205,9 @@ impl Diff {
     pub async fn text_part(&self, part: Range<u32>) -> Result<String, Error> {
         let mut out = String::new();
 
-        if !(self.original_range.contains(&part.start) && self.original_range.contains(&part.end)) {
+        if part.start < self.original_range.start || part.end > self.original_range.end {
             return Err(Error::Invalid);
-        };
+        }
         let start = part.start - self.original_range.start;
         let end = start + part.end - part.start;
 
