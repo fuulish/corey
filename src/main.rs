@@ -25,7 +25,7 @@ mod diff;
 #[derive(Debug)]
 enum Error {
     SNH(String),
-    NotImplemented,
+    NotImplemented(String),
     MissingConfig(String),
     InconsistentConfig,
     Gathering(reqwest::Error),
@@ -48,7 +48,7 @@ impl fmt::Display for Error {
             Error::Git(_) => "Git error".to_owned(),
             Error::YAML(_) => "YAML processing error".to_owned(),
             Error::Gathering(_) => "gathering error".to_owned(),
-            Error::NotImplemented => "not implemented".to_owned(),
+            Error::NotImplemented(f) => format!("{} not implemented", f),
             Error::IOError(_) => "I/O error".to_owned(),
             Error::MissingConfig(miss) => format!("configuration incomplete: {} missing", miss),
             Error::InconsistentConfig => "configuration inconsistent".to_owned(),
