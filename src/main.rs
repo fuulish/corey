@@ -161,6 +161,12 @@ impl ReviewComment {
             )
             .await;
 
+        if let Some(_) = self.side {
+            if self.side != self.start_side {
+                return Err(Error::NotImplemented("multi-side comments".to_owned()));
+            }
+        }
+
         let (beg_diff, end_diff, found_diff) = match self.get_subject_type() {
             SubjectType::File => (beg, end, false), // XXX: found_diff correct?
             SubjectType::Line => {
