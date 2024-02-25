@@ -29,6 +29,8 @@ impl Error {
 // XXX: this work, but it's not pretty
 pub struct Diff {
     path: String, // XXX: use std::path::Path?
+    #[cfg(feature = "theFuture")]
+    original_path: String, // XXX: use proper path, also
     // XXX: also include original_path? (not needed, ATM)
     #[cfg(feature = "debug")]
     pub original_range: std::ops::Range<u32>,
@@ -82,6 +84,8 @@ impl Diff {
         let mut context_start: u32 = 0; // 0 is not a valid line number (how about using something uninitialized?)
 
         let mut previous_line_type = LineType::Context;
+
+        // XXX: also extract path and original_path from diff hunk
 
         // XXX: move first iteration out and simplify loop
         for line in hunk.split('\n') {
