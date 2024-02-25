@@ -161,8 +161,8 @@ impl ReviewComment {
             )
             .await;
 
-        let (beg_diff, end_diff) = match self.get_subject_type() {
-            SubjectType::File => (beg, end),
+        let (beg_diff, end_diff, found_diff) = match self.get_subject_type() {
+            SubjectType::File => (beg, end, false), // XXX: found_diff correct?
             SubjectType::Line => {
                 let line_diff = end - beg;
 
@@ -180,6 +180,7 @@ impl ReviewComment {
                     .await;
                 // can go looking for text() and for original_text(), but it's more likely to be some
                 // variation of text()
+                // XXX: need to supply side/start_side, and corresponding line ranges
                 let commented_on_text = diff
                     .text_part(beg..end)
                     .await
@@ -194,11 +195,11 @@ impl ReviewComment {
                         format!("FUX| commented on text: {}", commented_on_text),
                     )
                     .await;
-                let beg: u32 = if commented_on_text.len() == 0 {
+                if commented_on_text.len() == 0 {
                     client
                         .log_message(lsp_types::MessageType::ERROR, "zero-length text")
                         .await;
-                    beg
+                    (beg, beg + 1, false)
                 } else {
                     match text.find(&commented_on_text) {
                         Some(index) => {
@@ -211,7 +212,7 @@ impl ReviewComment {
                                 .count()
                                 .try_into()
                                 .map_err(Error::try_from_int_error)?;
-                            n_preceding + 1
+                            (n_preceding + 1, n_preceding + 1 + line_diff, true)
                         }
                         None => {
                             client
@@ -223,13 +224,10 @@ impl ReviewComment {
                                     ),
                                 )
                                 .await;
-                            beg
+                            (beg, beg + 1, false)
                         }
                     }
-                };
-
-                let end = beg + line_diff;
-                (beg, end)
+                }
             }
         };
 
@@ -247,12 +245,12 @@ impl ReviewComment {
             )
             .await;
 
-        if beg == beg_diff && end == end_diff {
+        if beg == beg_diff && end == end_diff && found_diff {
             client
                 .log_message(lsp_types::MessageType::ERROR, "InPlace")
                 .await;
             Ok(LineRange::InPlace(final_range))
-        } else if (beg_diff as i32 - beg as i32) == (end_diff as i32 - end as i32) {
+        } else if (beg_diff as i32 - beg as i32) == (end_diff as i32 - end as i32) && found_diff {
             // XXX: should also be larger than zero,
             // however that's sorta guaranteed by
             // beg/end being larger
