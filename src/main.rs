@@ -188,6 +188,9 @@ impl ReviewComment {
         //      - next check if we can find the proper context
         //          - reduce context until proper context found
         //              - calculate approximate new line location from diff notes
+        client
+            .log_message(lsp_types::MessageType::ERROR, "FUX| start this sucker")
+            .await;
 
         let (beg, end) = if let Ok(t) = self.comment_range() {
             (t.0, t.1)
@@ -232,8 +235,10 @@ impl ReviewComment {
                 // can go looking for text() and for original_text(), but it's more likely to be some
                 // variation of text()
                 // XXX: need to supply side/start_side, and corresponding line ranges
+                // XXX: somewhere here is the error, not sure what's off, though
+
                 let commented_on_text = diff
-                    .text_part(beg..end)
+                    .text_part(beg..end, self.commented_side()?)
                     .await
                     .map_err(Error::from_diff_error)?; // XXX: again, need to find correctly sided
                                                        // text
@@ -870,6 +875,12 @@ impl Backend {
         let mut error_n_comments: Vec<&ReviewComment> = Vec::new();
 
         for &comm in &conversation.starter {
+            self.client
+                .log_message(
+                    lsp_types::MessageType::ERROR,
+                    format!("FUX| looking at: path: {}; uri: {}", comm.path, uri),
+                )
+                .await;
             if uri.contains(&comm.path) {
                 #[cfg(feature = "debug")]
                 match comm.line_range(&params.text, &self.client).await {

@@ -20,6 +20,8 @@ impl fmt::Display for Error {
 
 use std::{num::ParseIntError, ops::Range};
 
+use crate::CommentSide;
+
 impl Error {
     fn from_parse_int_error(err: ParseIntError) -> Error {
         Error::Invalid
@@ -206,13 +208,20 @@ impl Diff {
         // line-ending character
     }
 
-    pub async fn text_part(&self, part: Range<u32>) -> Result<String, Error> {
+    pub async fn text_part(&self, part: Range<u32>, side: CommentSide) -> Result<String, Error> {
         let mut out = String::new();
 
-        if part.start < self.original_range.start || part.end > self.original_range.end {
+        // XXX: this needs to be from the correct side (original might not be the one...)
+        // XXX: use arg to function to choose respective range
+
+        let (start, end) = match side {
+            CommentSide::Left => (self.original_range.start, self.original_range.end),
+            CommentSide::Right => (self.range.start, self.range.end),
+        };
+        if part.start < start || part.end > end {
             return Err(Error::Invalid);
         }
-        let start = part.start - self.original_range.start;
+        let start = part.start - start;
         let end = start + part.end - part.start;
 
         for line_index in start..end {
