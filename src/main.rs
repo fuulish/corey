@@ -25,7 +25,7 @@ mod diff;
 #[derive(Debug)]
 enum Error {
     SNH(String),
-    NotImplemented,
+    NotImplemented(String),
     MissingConfig(String),
     InconsistentConfig,
     Gathering(reqwest::Error),
@@ -48,7 +48,7 @@ impl fmt::Display for Error {
             Error::Git(_) => "Git error".to_owned(),
             Error::YAML(_) => "YAML processing error".to_owned(),
             Error::Gathering(_) => "gathering error".to_owned(),
-            Error::NotImplemented => "not implemented".to_owned(),
+            Error::NotImplemented(f) => format!("{} not implemented", f),
             Error::IOError(_) => "I/O error".to_owned(),
             Error::MissingConfig(miss) => format!("configuration incomplete: {} missing", miss),
             Error::InconsistentConfig => "configuration inconsistent".to_owned(),
@@ -94,14 +94,16 @@ enum SubjectType {
 }
 
 enum CommentSide {
-    OriginalSide,
-    Side,
+    Left,
+    Right,
+    // Both,
 }
 
 enum LineRange {
     InPlace(lsp_types::Range),
     Moved(lsp_types::Range),
     Modified(lsp_types::Range),
+    NotImplemented(lsp_types::Range),
     // XXX: maybe re-integrate that
     // NoText,
     // NotFound,
@@ -117,8 +119,24 @@ enum LineRange {
 // XXX: fix understanding, but original is referring to a file from which was moved to another file
 impl ReviewComment {
     // XXX: implement
-    fn commented_side(&self) -> CommentSide {
-        CommentSide::OriginalSide
+    fn commented_side(&self) -> Result<CommentSide, Error> {
+        if let Some(s1) = &self.side {
+            if let Some(s2) = &self.start_side {
+                if s1 != s2 {
+                    return Err(Error::NotImplemented(
+                        "different start/stop sides".to_owned(),
+                    ));
+                }
+            }
+        }
+        match &self.side {
+            Some(v) => match v.as_str() {
+                "LEFT" => Ok(CommentSide::Left),
+                "RIGHT" => Ok(CommentSide::Right),
+                _ => panic!(),
+            },
+            None => Ok(CommentSide::Right),
+        }
     }
 
     fn get_subject_type(&self) -> SubjectType {
@@ -136,6 +154,29 @@ impl ReviewComment {
                                        // are present
         }
     }
+    fn comment_range(&self) -> Result<(u32, u32), Error> {
+        let (start_line, line) = match self.commented_side() {
+            // XXX: I thought Left/Original and Right/_ would be the correct combination
+            Ok(CommentSide::Right) => (self.original_start_line, Some(self.original_line)),
+            Ok(CommentSide::Left) => (self.start_line, self.line),
+            Err(e) => return Err(e),
+        };
+
+        let line = match line {
+            Some(l) => l,
+            None => panic!(),
+        };
+
+        let end = line + 1; // range is exclusive, so 1-based inclusive end is fine for
+                            // zero-based exclusive end
+        let beg = match start_line {
+            Some(l) => l, // start needs to be corrected, though
+            None => end - 1,
+        };
+
+        Ok((beg, end))
+    }
+
     // XXX: the range is currently 1-based, because line numbers are 1-based -> should this be so?
     // XXX: this is still very much GitHub specific
     #[cfg(feature = "debug")]
@@ -148,12 +189,22 @@ impl ReviewComment {
         //          - reduce context until proper context found
         //              - calculate approximate new line location from diff notes
 
-        let end = self.original_line + 1; // range is exclusive, so 1-based inclusive end is fine for
-                                          // zero-based exclusive end
-        let beg = match self.original_start_line {
-            Some(l) => l, // start needs to be corrected, though
-            None => end - 1,
+        let (beg, end) = if let Ok(t) = self.comment_range() {
+            (t.0, t.1)
+        } else {
+            // XXX: this is just a temporary fix for having no support for multi-side comment
+            client
+                .log_message(lsp_types::MessageType::ERROR, "NotImplemented")
+                .await;
+            let final_range = lsp_types::Range::new(
+                // lsp_types::Position are 'zero-based line and character offset[s]'
+                // https://docs.rs/lsp-types/latest/lsp_types/struct.Position.html
+                lsp_types::Position::new(self.original_line - 1, 0),
+                lsp_types::Position::new(self.original_line, 0),
+            );
+            return Ok(LineRange::NotImplemented(final_range));
         };
+
         client
             .log_message(
                 lsp_types::MessageType::ERROR,
@@ -853,6 +904,7 @@ impl Backend {
                     LineRange::Moved(v) => (format!("moved: "), v),
                     LineRange::InPlace(v) => (format!(""), v),
                     LineRange::Modified(v) => (format!("modified: "), v),
+                    LineRange::NotImplemented(v) => (format!("not implemented: "), v),
                 };
                 lsp_types::Diagnostic::new_simple(
                     rng,
