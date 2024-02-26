@@ -156,6 +156,7 @@ impl ReviewComment {
     }
     fn comment_range(&self) -> Result<(u32, u32), Error> {
         let (start_line, line) = match self.commented_side() {
+            // XXX: I thought Left/Original and Right/_ would be the correct combination
             Ok(CommentSide::Right) => (self.original_start_line, Some(self.original_line)),
             Ok(CommentSide::Left) => (self.start_line, self.line),
             Err(e) => return Err(e),
