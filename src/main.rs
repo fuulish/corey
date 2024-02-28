@@ -131,16 +131,18 @@ impl ReviewComment {
             "R".to_owned()
         };
 
-        if let Some(s) = &self.start_side {
-            match s.as_str() {
-                "LEFT" => sides.push_str("L"),
-                "RIGHT" => sides.push_str("R"),
-                "side" => sides.push_str(sides.clone().as_str()),
-                _ => return Err(Error::SNH("received inconsistent GitHub data".to_owned())),
-            }
-        } else {
-            sides.push_str("R")
-        };
+        sides.push_str(
+            &(if let Some(s) = &self.start_side {
+                match s.as_str() {
+                    "LEFT" => "L".to_owned(),
+                    "RIGHT" => "R".to_owned(),
+                    "side" => sides.clone(),
+                    _ => return Err(Error::SNH("received inconsistent GitHub data".to_owned())),
+                }
+            } else {
+                "R".to_owned()
+            }),
+        );
 
         match sides.as_str() {
             "LL" => Ok(CommentSide::LL),
