@@ -94,9 +94,10 @@ enum SubjectType {
 }
 
 enum CommentSide {
-    Left,
-    Right,
-    // Both,
+    LL,
+    RR,
+    RL,
+    LR,
 }
 
 enum LineRange {
@@ -120,22 +121,33 @@ enum LineRange {
 impl ReviewComment {
     // XXX: implement
     fn commented_side(&self) -> Result<CommentSide, Error> {
-        if let Some(s1) = &self.side {
-            if let Some(s2) = &self.start_side {
-                if s1 != s2 {
-                    return Err(Error::NotImplemented(
-                        "different start/stop sides".to_owned(),
-                    ));
-                }
+        let mut sides = if let Some(s) = &self.side {
+            match s.as_str() {
+                "LEFT" => "L".to_owned(),
+                "RIGHT" => "R".to_owned(),
+                _ => return Err(Error::SNH("received inconsistent GitHub data".to_owned())),
             }
-        }
-        match &self.side {
-            Some(v) => match v.as_str() {
-                "LEFT" => Ok(CommentSide::Left),
-                "RIGHT" => Ok(CommentSide::Right),
-                _ => panic!(),
-            },
-            None => Ok(CommentSide::Right),
+        } else {
+            "R".to_owned()
+        };
+
+        if let Some(s) = &self.start_side {
+            match s.as_str() {
+                "LEFT" => sides.push_str("L"),
+                "RIGHT" => sides.push_str("R"),
+                "side" => sides.push_str(sides.clone().as_str()),
+                _ => return Err(Error::SNH("received inconsistent GitHub data".to_owned())),
+            }
+        } else {
+            sides.push_str("R")
+        };
+
+        match sides.as_str() {
+            "LL" => Ok(CommentSide::LL),
+            "RR" => Ok(CommentSide::RR),
+            "RL" => Ok(CommentSide::RL),
+            "LR" => Ok(CommentSide::LR),
+            _ => Err(Error::SNH("internal error".to_owned())),
         }
     }
 
@@ -155,11 +167,21 @@ impl ReviewComment {
         }
     }
     fn comment_range(&self) -> Result<(u32, u32), Error> {
-        let (start_line, line) = match self.commented_side() {
+        let (start_line, line) = match self.commented_side()? {
             // XXX: I thought Left/Original and Right/_ would be the correct combination
-            Ok(CommentSide::Right) => (self.original_start_line, Some(self.original_line)),
-            Ok(CommentSide::Left) => (self.start_line, self.line),
-            Err(e) => return Err(e),
+            CommentSide::RR | CommentSide::RL | CommentSide::LR => {
+                (self.original_start_line, Some(self.original_line))
+            }
+            CommentSide::LL => (self.start_line, self.line),
+            // XXX: RL or LR depends on what file we are looking at
+            // XXX: is there such a case in LR/RL that the files on left and right actually differ?
+            //      I have certainly seen unified diffs like that
+            //      XXX: how to generate an example
+            //      XXX: can such an example be generated within github
+            //      XXX: it's generally possible by comparing different files
+            //      I don't see how the multi-path diff would work in a review scenario
+            // CommentSide::RL => (self.start_line, self.line),
+            // CommentSide::LR => (self.start_line, self.line),
         };
 
         let line = match line {
