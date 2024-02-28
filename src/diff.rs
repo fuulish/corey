@@ -215,8 +215,10 @@ impl Diff {
         // XXX: use arg to function to choose respective range
 
         let (start, end) = match side {
-            CommentSide::Left => (self.original_range.start, self.original_range.end),
-            CommentSide::Right => (self.range.start, self.range.end),
+            CommentSide::LL | CommentSide::RL | CommentSide::LR => {
+                (self.original_range.start, self.original_range.end)
+            }
+            CommentSide::RR => (self.range.start, self.range.end),
         };
         if part.start < start || part.end > end {
             return Err(Error::Invalid);
