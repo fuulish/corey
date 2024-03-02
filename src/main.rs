@@ -168,9 +168,14 @@ impl ReviewComment {
                                        // are present
         }
     }
+    // XXX: one should get, from the diff hunk the paths that are involved
+    // XXX: from the editor, one should get which one you are looking at and then determine the
+    //      line ranges of interest
+    //      This would not be an issue with git where we know where things are coming from
     fn comment_range(&self) -> Result<(u32, u32), Error> {
         let (start_line, line) = match self.commented_side()? {
             // XXX: I thought Left/Original and Right/_ would be the correct combination
+            _ => (self.original_start_line, Some(self.original_line)),
             CommentSide::RR | CommentSide::RL | CommentSide::LR => {
                 (self.original_start_line, Some(self.original_line))
             }
@@ -182,6 +187,10 @@ impl ReviewComment {
             //      XXX: can such an example be generated within github
             //      XXX: it's generally possible by comparing different files
             //      I don't see how the multi-path diff would work in a review scenario
+            //      it works by:
+            //          - moving a file
+            //          - change a section
+            //          - change a section farther down
             // CommentSide::RL => (self.start_line, self.line),
             // CommentSide::LR => (self.start_line, self.line),
         };
