@@ -191,6 +191,7 @@ impl ReviewComment {
             //          - moving a file
             //          - change a section
             //          - change a section farther down
+            //          - marking the second section
             // CommentSide::RL => (self.start_line, self.line),
             // CommentSide::LR => (self.start_line, self.line),
         };
