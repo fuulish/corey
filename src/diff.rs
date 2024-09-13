@@ -28,6 +28,8 @@ impl Error {
     }
 }
 
+pub struct LinePair(u32, u32);
+
 // XXX: this work, but it's not pretty
 pub struct Diff {
     path: String, // XXX: use std::path::Path?
@@ -50,6 +52,7 @@ pub struct Diff {
     //    XXX: should be able to handle those as well
     //    XXX: multi-file diffs do not share context,
     //    do they?
+    associated_line_pairs: std::vec::Vec<LinePair>,
     trailing_newline: bool,
 }
 
@@ -82,6 +85,7 @@ impl Diff {
         let mut left_start: u32 = 0;
         let mut left_stop: u32 = 0;
 
+        let mut associated_line_pairs: Vec<LinePair> = Vec::new();
 
         let mut context = std::vec::Vec::<std::ops::Range<u32>>::new();
         let mut context_start: u32 = 0; // 0 is not a valid line number (how about using something uninitialized?)
@@ -125,6 +129,8 @@ impl Diff {
                     .map_err(Error::from_parse_int_error)?;
                 right_stop = right_start;
                 context_start = right_start;
+
+                associated_line_pairs.push(LinePair(left_start, left_stop));
             } else {
                 let line_type = if line.starts_with(" ") {
                     LineType::Context
@@ -156,6 +162,9 @@ impl Diff {
                     }
                 }
 
+                // XXX: there needs to be an associated initial push, somewhere
+                associated_line_pairs.push(LinePair(left_stop, right_stop));
+
                 if previous_line_type != line_type {
                     match line_type {
                         LineType::Context => {
@@ -180,6 +189,7 @@ impl Diff {
             left_lines,
             right_lines,
             context,
+            associated_line_pairs,
             trailing_newline,
         })
     }
