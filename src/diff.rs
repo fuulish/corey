@@ -225,27 +225,28 @@ impl Diff {
         // XXX: this needs to be from the correct side (original might not be the one...)
         // XXX: use arg to function to choose respective range
 
-        let (lines, diff_line_range) = match side {
+        // let (lines, diff_line_range) = match side {
+        let (lines, start, end) = match side {
             CommentSide::LR | CommentSide::RL => panic!("not implemented"),
             CommentSide::LL => (
                 &self.left_lines,
-                self.associated_line_pairs[0].0
-                    ..self.associated_line_pairs[self.associated_line_pairs.len() - 1].0,
+                self.associated_line_pairs[0].0,
+                self.associated_line_pairs[self.associated_line_pairs.len() - 1].0,
             ),
             CommentSide::RR => (
                 &self.right_lines,
-                self.associated_line_pairs[0].1
-                    ..self.associated_line_pairs[self.associated_line_pairs.len() - 1].1,
+                self.associated_line_pairs[0].1,
+                self.associated_line_pairs[self.associated_line_pairs.len() - 1].1,
                 // XXX: is there really no other way to get the last element of a vector
             ),
         };
 
-        let (start, end) = match side {
-            CommentSide::LL | CommentSide::RL | CommentSide::LR => {
-                (self.original_range.start, self.original_range.end)
-            }
-            CommentSide::RR => (self.range.start, self.range.end),
-        };
+        // let (start, end) = match side {
+        //     CommentSide::LL | CommentSide::RL | CommentSide::LR => {
+        //         (self.original_range.start, self.original_range.end)
+        //     }
+        //     CommentSide::RR => (self.range.start, self.range.end),
+        // };
         if part.start < start || part.end > end {
             return Err(Error::Invalid);
         }
