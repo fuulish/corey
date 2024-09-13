@@ -1,7 +1,7 @@
 //! Review LSP
 //!
 //! Provides LSP interfaces for reviewing code inline in editor.
-use diff::Diff;
+use diff::{Diff, LinePair};
 use reqwest;
 use reqwest::Response;
 use serde::{Deserialize, Serialize};
@@ -173,32 +173,12 @@ impl ReviewComment {
     //      line ranges of interest
     //      This would not be an issue with git where we know where things are coming from
     fn comment_range(&self) -> Result<(u32, u32), Error> {
-        let (start_line, line) = match self.commented_side()? {
-            // XXX: I thought Left/Original and Right/_ would be the correct combination
-            _ => (self.original_start_line, Some(self.original_line)),
-            CommentSide::RR | CommentSide::RL | CommentSide::LR => {
-                (self.original_start_line, Some(self.original_line))
-            }
-            CommentSide::LL => (self.start_line, self.line),
-            // XXX: RL or LR depends on what file we are looking at
-            // XXX: is there such a case in LR/RL that the files on left and right actually differ?
-            //      I have certainly seen unified diffs like that
-            //      XXX: how to generate an example
-            //      XXX: can such an example be generated within github
-            //      XXX: it's generally possible by comparing different files
-            //      I don't see how the multi-path diff would work in a review scenario
-            //      it works by:
-            //          - moving a file
-            //          - change a section
-            //          - change a section farther down
-            //          - marking the second section
-            // CommentSide::RL => (self.start_line, self.line),
-            // CommentSide::LR => (self.start_line, self.line),
-        };
+        // XXX: use start_line, if present
 
-        let line = match line {
-            Some(l) => l,
-            None => panic!(),
+        let (start_line, line) = if let Some(line) = self.line {
+            (self.start_line, line)
+        } else {
+            (self.original_start_line, self.original_line)
         };
 
         let end = line + 1; // range is exclusive, so 1-based inclusive end is fine for
@@ -226,7 +206,15 @@ impl ReviewComment {
             .log_message(lsp_types::MessageType::ERROR, "FUX| start this sucker")
             .await;
 
+        // XXX: (in non-git mode) we are always looking for the two sides of the diff
+        //      then, we will compare either text chunk to what's in the currently open file
+        //
+        //      if we are in git mode, we'll get both sides, also, but investigate the history
+        //      of the right-hand-side, primarily, but look at the left-hand side as well, if we
+        //      cannot find anything
+
         let (beg, end) = if let Ok(t) = self.comment_range() {
+            // XXX: upper branch should never actually fail
             (t.0, t.1)
         } else {
             // XXX: this is just a temporary fix for having no support for multi-side comment
@@ -249,6 +237,7 @@ impl ReviewComment {
             )
             .await;
 
+        // XXX: continue here with getting the text_part on both sides
         let (beg_diff, end_diff, found_diff) = match self.get_subject_type() {
             SubjectType::File => (beg, end, false), // XXX: found_diff correct?
             SubjectType::Line => {
@@ -272,7 +261,12 @@ impl ReviewComment {
                 // XXX: somewhere here is the error, not sure what's off, though
 
                 let commented_on_text = diff
-                    .text_part(beg..end, self.commented_side()?)
+                    .text_part(beg..end, CommentSide::RR)
+                    // XXX: need to make a decision on whether we want to:
+                    // - return a list of text parts (one for each side)
+                    // - are there such things as purely left or right comments?
+                    // -> we can always pretend like there are
+                    // .text_part(beg..end, self.commented_side()?)
                     .await
                     .map_err(Error::from_diff_error)?; // XXX: again, need to find correctly sided
                                                        // text
