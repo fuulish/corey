@@ -254,7 +254,7 @@ impl Diff {
         let end = start + part.end - part.start;
 
         for line_index in start..end {
-            out.push_str(&self.right_lines[line_index as usize]);
+            out.push_str(&lines[line_index as usize]);
             out.push_str("\n"); // XXX: superfluous?/could check hunk if it contains a trailing \n
         }
 
