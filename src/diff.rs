@@ -39,8 +39,8 @@ pub struct Diff {
     #[cfg(not(feature = "debug"))]
     original_range: std::ops::Range<u32>,
     range: std::ops::Range<u32>,
-    original_lines: std::vec::Vec<String>,
-    lines: std::vec::Vec<String>,
+    left_lines: std::vec::Vec<String>,
+    right_lines: std::vec::Vec<String>,
     context: std::vec::Vec<std::ops::Range<u32>>, // only one context needed, because it's common
     // XXX: unless there are movements between files
     // XXX: we are dealing with single file diffs,
@@ -74,13 +74,14 @@ impl Diff {
         }
 
         let trailing_newline = if hunk.ends_with("\n") { true } else { false };
-        let mut original_lines = std::vec::Vec::<String>::new();
-        let mut lines = std::vec::Vec::<String>::new();
+        let mut left_lines = std::vec::Vec::<String>::new();
+        let mut right_lines = std::vec::Vec::<String>::new();
 
-        let mut start: u32 = 0;
-        let mut stop: u32 = 0;
-        let mut original_start: u32 = 0;
-        let mut original_stop: u32 = 0;
+        let mut right_start: u32 = 0;
+        let mut right_stop: u32 = 0;
+        let mut left_start: u32 = 0;
+        let mut left_stop: u32 = 0;
+
 
         let mut context = std::vec::Vec::<std::ops::Range<u32>>::new();
         let mut context_start: u32 = 0; // 0 is not a valid line number (how about using something uninitialized?)
@@ -104,26 +105,26 @@ impl Diff {
                 let original_stop_index = data.find(" ").ok_or(Error::Parse)?;
 
                 let mut comma_sep = data[start_index..original_stop_index].split(",");
-                original_start = comma_sep
+                left_start = comma_sep
                     .next()
                     .ok_or(Error::Parse)?
                     .parse::<u32>()
                     .map_err(Error::from_parse_int_error)?;
-                original_stop = original_start; // stop will be calculated from how many lines there are in the patch
-                                                // XXX: could add cross-checking/precalculation here for later
-                                                // verification
+                left_stop = left_start; // stop will be calculated from how many lines there are in the patch
+                                        // XXX: could add cross-checking/precalculation here for later
+                                        // verification
 
                 start_index = data.find("+").ok_or(Error::Parse)? + 1;
                 data = data[start_index..].trim_start_matches(" "); // XXX start trim not necessary
 
                 comma_sep = data.split(",");
-                start = comma_sep
+                right_start = comma_sep
                     .next()
                     .ok_or(Error::Parse)?
                     .parse::<u32>()
                     .map_err(Error::from_parse_int_error)?;
-                stop = start;
-                context_start = start;
+                right_stop = right_start;
+                context_start = right_start;
             } else {
                 let line_type = if line.starts_with(" ") {
                     LineType::Context
@@ -139,19 +140,19 @@ impl Diff {
                 //      could remove the last newline by comparing to received diff...
                 match line_type {
                     LineType::Context => {
-                        original_lines.push(line[1..].to_owned());
-                        original_stop += 1;
+                        left_lines.push(line[1..].to_owned());
+                        left_stop += 1;
 
-                        lines.push(line[1..].to_owned());
-                        stop += 1;
+                        right_lines.push(line[1..].to_owned());
+                        right_stop += 1;
                     }
                     LineType::Addition => {
-                        lines.push(line[1..].to_owned());
-                        stop += 1;
+                        right_lines.push(line[1..].to_owned());
+                        right_stop += 1;
                     }
                     LineType::Deletion => {
-                        original_lines.push(line[1..].to_owned());
-                        original_stop += 1;
+                        left_lines.push(line[1..].to_owned());
+                        left_stop += 1;
                     }
                 }
 
@@ -159,11 +160,11 @@ impl Diff {
                     match line_type {
                         LineType::Context => {
                             // start new context
-                            context_start = stop - 1;
+                            context_start = right_stop - 1;
                         }
                         LineType::Addition | LineType::Deletion => {
                             if previous_line_type == LineType::Context {
-                                context.push(context_start..stop);
+                                context.push(context_start..right_stop);
                             }
                         }
                     }
@@ -174,10 +175,10 @@ impl Diff {
 
         Ok(Diff {
             path: path.to_owned(),
-            original_range: original_start..original_stop,
-            range: start..stop,
-            original_lines,
-            lines,
+            original_range: left_start..left_stop,
+            range: right_start..right_stop,
+            left_lines,
+            right_lines,
             context,
             trailing_newline,
         })
@@ -188,7 +189,7 @@ impl Diff {
         // something similar
         let mut out = String::new();
 
-        for line in &self.lines {
+        for line in &self.right_lines {
             out.push_str(&line);
             out.push_str("\n"); // XXX: superfluous?/could check hunk if it contains a trailing \n
         }
@@ -227,7 +228,7 @@ impl Diff {
         let end = start + part.end - part.start;
 
         for line_index in start..end {
-            out.push_str(&self.lines[line_index as usize]);
+            out.push_str(&self.right_lines[line_index as usize]);
             out.push_str("\n"); // XXX: superfluous?/could check hunk if it contains a trailing \n
         }
 
@@ -244,7 +245,7 @@ impl Diff {
     pub fn original_text(&self) -> String {
         let mut out = String::new();
 
-        for line in &self.original_lines {
+        for line in &self.left_lines {
             out.push_str(&line);
             out.push_str("\n"); // XXX: superfluous?
         }
@@ -276,7 +277,7 @@ impl Diff {
         for ctx in self.context.iter() {
             let mut tmp = String::new();
             for i in ctx.to_owned() {
-                tmp.push_str(&self.lines[(i - self.range.start) as usize]);
+                tmp.push_str(&self.right_lines[(i - self.range.start) as usize]);
                 tmp.push_str("\n");
             }
 
