@@ -178,6 +178,7 @@ impl ReviewComment {
         let (start_line, line) = if let Some(line) = self.line {
             (self.start_line, line)
         } else {
+            // XXX: we could in principle fall back to `original` diff as well, if we'd want to
             (self.original_start_line, self.original_line)
         };
 

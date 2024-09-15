@@ -226,6 +226,8 @@ impl Diff {
         // XXX: use arg to function to choose respective range
 
         // let (lines, diff_line_range) = match side {
+        // XXX: should this be a function?
+        // XXX: debug start and end
         let (lines, diff_start, diff_end) = match side {
             CommentSide::LR | CommentSide::RL => panic!("not implemented"),
             CommentSide::LL => (
@@ -250,6 +252,7 @@ impl Diff {
         if comment.start < diff_start || comment.end > diff_end {
             return Err(Error::Invalid);
         }
+        // XXX: this looks wrong
         let start = comment.start - diff_start;
         let end = start + comment.end - comment.start;
 
