@@ -130,7 +130,7 @@ impl Diff {
                 right_stop = right_start;
                 context_start = right_start;
 
-                associated_line_pairs.push(LinePair(left_start, left_stop));
+                associated_line_pairs.push(LinePair(left_start, right_start));
             } else {
                 let line_type = if line.starts_with(" ") {
                     LineType::Context
