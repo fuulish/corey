@@ -172,7 +172,7 @@ impl ReviewComment {
     // XXX: from the editor, one should get which one you are looking at and then determine the
     //      line ranges of interest
     //      This would not be an issue with git where we know where things are coming from
-    fn comment_range(&self) -> Result<(u32, u32), Error> {
+    fn comment_range(&self) -> (u32, u32) {
         // XXX: use start_line, if present
 
         let (start_line, line) = if let Some(line) = self.line {
@@ -189,7 +189,7 @@ impl ReviewComment {
             None => end - 1,
         };
 
-        Ok((beg, end))
+        (beg, end)
     }
 
     // XXX: the range is currently 1-based, because line numbers are 1-based -> should this be so?
@@ -214,22 +214,7 @@ impl ReviewComment {
         //      of the right-hand-side, primarily, but look at the left-hand side as well, if we
         //      cannot find anything
 
-        let (beg, end) = if let Ok(t) = self.comment_range() {
-            // XXX: upper branch should never actually fail
-            (t.0, t.1)
-        } else {
-            // XXX: this is just a temporary fix for having no support for multi-side comment
-            client
-                .log_message(lsp_types::MessageType::ERROR, "NotImplemented")
-                .await;
-            let final_range = lsp_types::Range::new(
-                // lsp_types::Position are 'zero-based line and character offset[s]'
-                // https://docs.rs/lsp-types/latest/lsp_types/struct.Position.html
-                lsp_types::Position::new(self.original_line - 1, 0),
-                lsp_types::Position::new(self.original_line, 0),
-            );
-            return Ok(LineRange::NotImplemented(final_range));
-        };
+        let (beg, end) = self.comment_range();
 
         client
             .log_message(
@@ -238,6 +223,7 @@ impl ReviewComment {
             )
             .await;
 
+        // XXX: original_line should always be set - what about the case where SubjectType is File
         // XXX: continue here with getting the text_part on both sides
         let (beg_diff, end_diff, found_diff) = match self.get_subject_type() {
             SubjectType::File => (beg, end, false), // XXX: found_diff correct?
