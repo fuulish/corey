@@ -219,14 +219,14 @@ impl Diff {
         // line-ending character
     }
 
-    pub async fn text_part(&self, part: Range<u32>, side: CommentSide) -> Result<String, Error> {
+    pub async fn text_part(&self, comment: Range<u32>, side: CommentSide) -> Result<String, Error> {
         let mut out = String::new();
 
         // XXX: this needs to be from the correct side (original might not be the one...)
         // XXX: use arg to function to choose respective range
 
         // let (lines, diff_line_range) = match side {
-        let (lines, start, end) = match side {
+        let (lines, diff_start, diff_end) = match side {
             CommentSide::LR | CommentSide::RL => panic!("not implemented"),
             CommentSide::LL => (
                 &self.left_lines,
@@ -247,11 +247,11 @@ impl Diff {
         //     }
         //     CommentSide::RR => (self.range.start, self.range.end),
         // };
-        if part.start < start || part.end > end {
+        if comment.start < diff_start || comment.end > diff_end {
             return Err(Error::Invalid);
         }
-        let start = part.start - start;
-        let end = start + part.end - part.start;
+        let start = comment.start - diff_start;
+        let end = start + comment.end - comment.start;
 
         for line_index in start..end {
             out.push_str(&lines[line_index as usize]);
