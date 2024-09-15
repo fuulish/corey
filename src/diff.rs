@@ -228,7 +228,7 @@ impl Diff {
         // let (lines, diff_line_range) = match side {
         // XXX: should this be a function?
         // XXX: debug start and end
-        let (lines, diff_start, diff_end) = match side {
+        let (lines, text_start, text_end) = match side {
             CommentSide::LR | CommentSide::RL => panic!("not implemented"),
             CommentSide::LL => (
                 &self.left_lines,
@@ -249,11 +249,11 @@ impl Diff {
         //     }
         //     CommentSide::RR => (self.range.start, self.range.end),
         // };
-        if comment.start < diff_start || comment.end > diff_end {
+        if comment.start < text_start || comment.end > text_end {
             return Err(Error::Invalid);
         }
         // XXX: this looks wrong
-        let start = comment.start - diff_start;
+        let start = comment.start - text_start;
         let end = start + comment.end - comment.start;
 
         for line_index in start..end {
